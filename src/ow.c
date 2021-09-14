@@ -291,6 +291,8 @@ main (int argc, char *argv[])
 	  close (ipfds[1]);
 	  iclosed = 1;
 	}
+      if (oeof && osize == 0)
+	break;
       if (!ieof && isize < ist.st_blksize)
 	{
 	  FD_SET (ifd, &rfds);
