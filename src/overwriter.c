@@ -117,7 +117,7 @@ main (int argc, char *argv[])
 	  if (maxfd < opfds[0])
 	    maxfd = opfds[0];
 	}
-      if (osize > 0 && ipos > opos)
+      if (osize > 0 && (ieof || ipos > opos))
 	{
 	  FD_SET (fd, &wfds);
 	  if (maxfd < fd)
@@ -186,7 +186,7 @@ main (int argc, char *argv[])
       if (FD_ISSET (fd, &wfds))
 	{
 	  size_t wsize = osize;
-	  if (wsize > ipos - opos)
+	  if (!ieof && wsize > ipos - opos)
 	    wsize = ipos - opos;
 	  ssize_t sz = pwrite (fd, obuf, wsize, opos);
 	  if (sz == -1)
