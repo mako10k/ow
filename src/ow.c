@@ -17,7 +17,8 @@ static void
 print_usage (FILE * fp, int argc, char *argv[])
 {
   fprintf (fp, "%s\n", PACKAGE_STRING);
-  fprintf (fp, "  redirect files to command even if input and output are save file\n");
+  fprintf (fp,
+	   "  redirect files to command even if input and output are save file\n");
   fprintf (fp, "\n");
   fprintf (fp, "Usage:\n");
   fprintf (fp, "  %s [options] [--] cmd [arg ...]\n", argv[0]);
@@ -370,8 +371,7 @@ main (int argc, char *argv[])
 	  size_t rsize = ist.st_blksize - isize;
 	  if (overwrite && !append && ist.st_size - ipos < rsize)
 	    rsize = ist.st_size - ipos;
-	  ssize_t sz =
-	    rsize == 0 ? 0 : read (ifd, ibuf + isize, rsize);
+	  ssize_t sz = rsize == 0 ? 0 : read (ifd, ibuf + isize, rsize);
 	  if (sz == -1)
 	    {
 	      perror ("pread");
