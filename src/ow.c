@@ -11,20 +11,24 @@
 #include <sys/wait.h>
 #include <errno.h>
 
+#include "config.h"
+
 static void
 print_usage (FILE * fp, int argc, char *argv[])
 {
+  fprintf (fp, "%s\n", PACKAGE_STRING);
+  fprintf (fp, "  redirect files to command even if input and output are save file\n");
   fprintf (fp, "\n");
   fprintf (fp, "Usage:\n");
   fprintf (fp, "  %s [options] [--] cmd [arg ...]\n", argv[0]);
   fprintf (fp, "\n");
   fprintf (fp, "Options:\n");
-  fprintf (fp, "  -r infile     : input        file [<stdin>]\n");
-  fprintf (fp, "  -w outfile    : output       file [<stdout>]\n");
-  fprintf (fp, "  -o inoutfile  : input/output file\n");
-  fprintf (fp, "  -n renamefile : rename output file\n");
+  fprintf (fp, "  -i infile     : input         file [<stdin>]\n");
+  fprintf (fp, "  -o outfile    : output        file [<stdout>]\n");
+  fprintf (fp, "  -f inoutfile  : input/output  file\n");
+  fprintf (fp, "  -r renamefile : rename output file\n");
   fprintf (fp, "  -a            : append output file\n");
-  fprintf (fp, "  -t            : test run\n");
+  fprintf (fp, "  -n            : test run\n");
   fprintf (fp, "  -p            : punchhole after read\n");
   fprintf (fp, "  -h            : show usage\n");
   fprintf (fp, "\n");
@@ -89,28 +93,28 @@ main (int argc, char *argv[])
 
   while (1)
     {
-      int c = getopt (argc, argv, "r:w:o:n:atph");
+      int c = getopt (argc, argv, "i:o:f:r:anph");
       if (c == -1)
 	break;
       switch (c)
 	{
-	case 'r':
+	case 'i':
 	  ifile = optarg;
-	  break;
-	case 'w':
-	  ofile = optarg;
 	  break;
 	case 'o':
+	  ofile = optarg;
+	  break;
+	case 'f':
 	  ifile = optarg;
 	  ofile = optarg;
 	  break;
-	case 'n':
+	case 'r':
 	  rfile = optarg;
 	  break;
 	case 'a':
 	  append = 1;
 	  break;
-	case 't':
+	case 'n':
 	  test = 1;
 	  break;
 	case 'p':
