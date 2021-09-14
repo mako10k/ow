@@ -1,2 +1,2 @@
-bin_PROGRAMS = overwriter
+bin_PROGRAMS = ow
 

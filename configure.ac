@@ -2,9 +2,9 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ([2.69])
-AC_INIT([overwriter], [0.0.1], [katsumata-m@t-axis.co.jp])
+AC_INIT([ow], [0.1.0], [katsumata-m@t-axis.co.jp])
 AM_INIT_AUTOMAKE([foreign])
-AC_CONFIG_SRCDIR([src/overwriter.c])
+AC_CONFIG_SRCDIR([src/ow.c])
 AC_CONFIG_HEADERS([config.h])
 
 # Checks for programs.
@@ -24,7 +24,9 @@ AC_CHECK_MEMBERS([struct stat.st_blksize])
 
 # Checks for library functions.
 AC_FUNC_FORK
-AC_CHECK_FUNCS([dup2 memmove select])
+AC_FUNC_LSTAT_FOLLOWS_SLASHED_SYMLINK
+AC_FUNC_MALLOC
+AC_CHECK_FUNCS([dup2 memmove select ftruncate getcwd])
 
 AC_CONFIG_FILES([Makefile src/Makefile])
 
