@@ -205,12 +205,6 @@ main (int argc, char *argv[])
 	}
     }
   close (opfds[0]);
-  if (ftruncate (fd, opos) == -1)
-    {
-      perror (argv[1]);
-      exit (EXIT_FAILURE);
-    }
-  close (fd);
   while (1)
     {
       int status;
@@ -224,6 +218,18 @@ main (int argc, char *argv[])
 	  exit (EXIT_FAILURE);
 	}
       if (pid_child == pid)
-	ret_status = status;
+	{
+	  ret_status = status;
+	  if (opos > 0
+	      || (WIFEXITED (status) && WEXITSTATUS (status) == EXIT_SUCCESS))
+	    {
+	      if (ftruncate (fd, opos) == -1)
+		{
+		  perror (argv[1]);
+		  exit (EXIT_FAILURE);
+		}
+	    }
+	}
+      close (fd);
     }
 }
