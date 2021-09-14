@@ -94,7 +94,7 @@ main (int argc, char *argv[])
 
   while (1)
     {
-      int c = getopt (argc, argv, "i:o:f:r:anph");
+      int c = getopt (argc, argv, "+i:o:f:r:anph");
       if (c == -1)
 	break;
       switch (c)
