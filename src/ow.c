@@ -308,7 +308,7 @@ main (int argc, char *argv[])
 	  if (maxfd < opfds[0])
 	    maxfd = opfds[0];
 	}
-      if (osize > 0 && (!overwrite || ieof || ipos > opos))
+      if (osize > 0 && (!overwrite || append || ieof || ipos > opos))
 	{
 	  FD_SET (ofd, &wfds);
 	  if (maxfd < ofd)
@@ -368,10 +368,10 @@ main (int argc, char *argv[])
       if (FD_ISSET (ifd, &rfds))
 	{
 	  size_t rsize = ist.st_blksize - isize;
-	  if (overwrite && append && ist.st_size - ipos < rsize)
+	  if (overwrite && !append && ist.st_size - ipos < rsize)
 	    rsize = ist.st_size - ipos;
 	  ssize_t sz =
-	    rsize == 0 ? 0 : read (ifd, ibuf + isize, ist.st_blksize - isize);
+	    rsize == 0 ? 0 : read (ifd, ibuf + isize, rsize);
 	  if (sz == -1)
 	    {
 	      perror ("pread");
@@ -399,7 +399,7 @@ main (int argc, char *argv[])
       if (FD_ISSET (ofd, &wfds))
 	{
 	  size_t wsize = osize;
-	  if (!ieof && overwrite && wsize > ipos - opos)
+	  if (!ieof && overwrite && !append && wsize > ipos - opos)
 	    wsize = ipos - opos;
 	  ssize_t sz = write (ofd, obuf, wsize);
 	  if (sz == -1)
