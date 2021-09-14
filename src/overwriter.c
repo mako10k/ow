@@ -28,7 +28,7 @@ main (int argc, char *argv[])
       print_usage (stderr, argc, argv);
       exit (EXIT_FAILURE);
     }
-  int fd = open (argv[1], O_RDWR);
+  int fd = open (argv[1], O_RDWR | O_CREAT, 0666);
   if (fd == -1)
     {
       perror (argv[1]);
@@ -40,13 +40,14 @@ main (int argc, char *argv[])
       perror ("fstat");
       exit (EXIT_FAILURE);
     }
-  int pfds[2][2];
-  if (pipe (pfds[0]) == -1)
+  int ipfds[2];
+  int opfds[2];
+  if (pipe (ipfds) == -1)
     {
       perror ("pipe");
       exit (EXIT_FAILURE);
     }
-  if (pipe (pfds[1]) == -1)
+  if (pipe (opfds) == -1)
     {
       perror ("pipe");
       exit (EXIT_FAILURE);
@@ -59,29 +60,33 @@ main (int argc, char *argv[])
     }
   if (pid == 0)
     {
-      close (pfds[0][0]);
-      close (pfds[1][1]);
-      if (pfds[0][1] != STDOUT_FILENO)
+      close (ipfds[1]);
+      close (opfds[0]);
+      if (ipfds[0] != STDIN_FILENO)
 	{
-	  dup2 (pfds[0][1], STDOUT_FILENO);
-	  close (pfds[0][1]);
+	  dup2 (ipfds[0], STDIN_FILENO);
+	  close (ipfds[0]);
 	}
-      if (pfds[1][0] != STDIN_FILENO)
+      if (opfds[1] != STDOUT_FILENO)
 	{
-	  dup2 (pfds[1][0], STDIN_FILENO);
-	  close (pfds[1][0]);
+	  dup2 (opfds[1], STDOUT_FILENO);
+	  close (opfds[1]);
 	}
       execvp (argv[2], argv + 2);
       perror (argv[2]);
       exit (EXIT_FAILURE);
     }
-  close (pfds[0][1]);
-  close (pfds[1][0]);
-  char buf[2][st.st_blksize];
-  size_t bsize[2] = { 0, 0 };
-  off_t fpos[2] = { 0, 0 };
-  int eof[2] = { 0, 0 };
-  int closed[2] = { 0, 0 };
+  close (ipfds[0]);
+  close (opfds[1]);
+  char ibuf[st.st_blksize];
+  char obuf[st.st_blksize];
+  size_t isize = 0;
+  size_t osize = 0;
+  off_t ipos = 0;
+  off_t opos = 0;
+  int ieof = 0;
+  int oeof = 0;
+  int iclosed = 0;
   while (1)
     {
       fd_set rfds, wfds;
@@ -89,30 +94,30 @@ main (int argc, char *argv[])
       FD_ZERO (&rfds);
       FD_ZERO (&wfds);
       // CLOSE
-      if (eof[0] && bsize[0] == 0 && !closed[0])
+      if (ieof && isize == 0 && !iclosed)
 	{
-	  close (pfds[1][1]);
-	  closed[0] = 1;
+	  close (ipfds[1]);
+	  iclosed = 1;
 	}
-      if (!eof[0] && bsize[0] < st.st_blksize)
+      if (!ieof && isize < st.st_blksize)
 	{
 	  FD_SET (fd, &rfds);
 	  if (maxfd < fd)
 	    maxfd = fd;
 	}
-      if (!closed[0] && bsize[0] > 0)
+      if (isize > 0)
 	{
-	  FD_SET (pfds[1][1], &wfds);
-	  if (maxfd < pfds[1][1])
-	    maxfd = pfds[1][1];
+	  FD_SET (ipfds[1], &wfds);
+	  if (maxfd < ipfds[1])
+	    maxfd = ipfds[1];
 	}
-      if (!eof[1] && bsize[1] < st.st_blksize)
+      if (!oeof && osize < st.st_blksize)
 	{
-	  FD_SET (pfds[0][0], &rfds);
-	  if (maxfd < pfds[0][0])
-	    maxfd = pfds[0][0];
+	  FD_SET (opfds[0], &rfds);
+	  if (maxfd < opfds[0])
+	    maxfd = opfds[0];
 	}
-      if (!closed[1] && bsize[1] > 0 && fpos[0] > fpos[1])
+      if (osize > 0 && ipos > opos)
 	{
 	  FD_SET (fd, &wfds);
 	  if (maxfd < fd)
@@ -120,13 +125,13 @@ main (int argc, char *argv[])
 	}
       if (maxfd == -1)
 	{
-	  if (eof[0] && bsize[0] == 0 && eof[1] && bsize[1] == 0)
+	  if (ieof && isize == 0 && oeof && osize == 0)
 	    break;
 	  fprintf (stderr, "buffer exceeded\n");
 	  fprintf (stderr, "%s(%ju) -> %s (buffer = %zu/pipe buffer = %u)\n",
-		   argv[1], (uintmax_t) fpos[0], argv[2], bsize[0], PIPE_BUF);
+		   argv[1], (uintmax_t) ipos, argv[2], isize, PIPE_BUF);
 	  fprintf (stderr, "%s(%ju) <- %s (buffer = %zu/pipe buffer = %u)\n",
-		   argv[1], (uintmax_t) fpos[1], argv[2], bsize[1], PIPE_BUF);
+		   argv[1], (uintmax_t) opos, argv[2], osize, PIPE_BUF);
 	  exit (EXIT_FAILURE);
 	}
       int ret = select (maxfd + 1, &rfds, &wfds, NULL, NULL);
@@ -135,73 +140,72 @@ main (int argc, char *argv[])
 	  perror ("select");
 	  exit (EXIT_FAILURE);
 	}
-      if (FD_ISSET (pfds[1][1], &wfds))
+      if (FD_ISSET (ipfds[1], &wfds))
 	{
-	  ssize_t sz = write (pfds[1][1], buf[0], bsize[0]);
+	  ssize_t sz = write (ipfds[1], ibuf, isize);
 	  if (sz == -1)
 	    {
 	      perror ("write");
 	      exit (EXIT_FAILURE);
 	    }
-	  memmove (buf[0], buf[0] + sz, bsize[0] - sz);
-	  bsize[0] -= sz;
+	  memmove (ibuf, ibuf + sz, isize - sz);
+	  isize -= sz;
 	  continue;
 	}
-      if (FD_ISSET (pfds[0][0], &rfds))
+      if (FD_ISSET (opfds[0], &rfds))
 	{
-	  ssize_t sz =
-	    read (pfds[0][0], buf[1] + bsize[1], st.st_blksize - bsize[1]);
+	  ssize_t sz = read (opfds[0], obuf + osize, st.st_blksize - osize);
 	  if (sz == -1)
 	    {
 	      perror ("read");
 	      exit (EXIT_FAILURE);
 	    }
 	  if (sz == 0)
-	      eof[1] = 1;
+	    oeof = 1;
 	  else
-	      bsize[1] += sz;
+	    osize += sz;
 	  continue;
 	}
       if (FD_ISSET (fd, &rfds))
 	{
-	  ssize_t sz =
-	    pread (fd, buf + bsize[0], st.st_blksize - bsize[0], fpos[0]);
+	  ssize_t sz = pread (fd, ibuf + isize, st.st_blksize - isize, ipos);
 	  if (sz == -1)
 	    {
 	      perror ("pread");
 	      exit (EXIT_FAILURE);
 	    }
 	  if (sz == 0)
-	      eof[0] = 1;
+	    ieof = 1;
 	  else
 	    {
-	      fpos[0] += sz;
-	      bsize[0] += sz;
+	      ipos += sz;
+	      isize += sz;
 	    }
 	  continue;
 	}
       if (FD_ISSET (fd, &wfds))
 	{
-	  size_t wsize = bsize[1];
-	  if (wsize > fpos[0] - fpos[1])
-	    wsize = fpos[0] - fpos[1];
-	  ssize_t sz = pwrite (fd, buf[1], bsize[1], fpos[1]);
+	  size_t wsize = osize;
+	  if (wsize > ipos - opos)
+	    wsize = ipos - opos;
+	  ssize_t sz = pwrite (fd, obuf, wsize, opos);
 	  if (sz == -1)
 	    {
 	      perror ("pwrite");
 	      exit (EXIT_FAILURE);
 	    }
-	  memmove (buf[1], buf[1] + sz, bsize[1] - sz);
-          fpos[1] += sz;
-	  bsize[1] -= sz;
+	  memmove (obuf, obuf + sz, st.st_blksize - sz);
+	  opos += sz;
+	  osize -= sz;
 	  continue;
 	}
     }
-  close (pfds[0][0]);
-  if (ftruncate(fd, fpos[1]) == -1) {
-    perror(argv[1]);
-    exit(EXIT_FAILURE);
-  }
+  close (opfds[0]);
+  if (ftruncate (fd, opos) == -1)
+    {
+      perror (argv[1]);
+      exit (EXIT_FAILURE);
+    }
   close (fd);
   while (1)
     {
