@@ -128,10 +128,14 @@ main (int argc, char *argv[])
 	  if (ieof && isize == 0 && oeof && osize == 0)
 	    break;
 	  fprintf (stderr, "buffer exceeded\n");
-	  fprintf (stderr, "%s(%ju) -> %s (buffer = %zu/pipe buffer = %u)\n",
-		   argv[1], (uintmax_t) ipos, argv[2], isize, PIPE_BUF);
-	  fprintf (stderr, "%s(%ju) <- %s (buffer = %zu/pipe buffer = %u)\n",
-		   argv[1], (uintmax_t) opos, argv[2], osize, PIPE_BUF);
+	  fprintf (stderr,
+		   "%s(%ju/%ju) -> %s (buffer = %zu/pipe buffer = %u)\n",
+		   argv[1], (uintmax_t) ipos, (uintmax_t) st.st_size, argv[2],
+		   isize, PIPE_BUF);
+	  fprintf (stderr,
+		   "%s(%ju/%ju) <- %s (buffer = %zu/pipe buffer = %u)\n",
+		   argv[1], (uintmax_t) opos, (uintmax_t) st.st_size, argv[2],
+		   osize, PIPE_BUF);
 	  exit (EXIT_FAILURE);
 	}
       int ret = select (maxfd + 1, &rfds, &wfds, NULL, NULL);
