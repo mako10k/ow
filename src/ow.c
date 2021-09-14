@@ -14,12 +14,14 @@
 #include "config.h"
 
 static void
-print_usage (FILE * fp, int argc, char *argv[])
+print_version (FILE * fp)
 {
   fprintf (fp, "%s\n", PACKAGE_STRING);
-  fprintf (fp,
-	   "  redirect files to command even if input and output are save file\n");
-  fprintf (fp, "\n");
+}
+
+static void
+print_usage (FILE * fp, int argc, char *argv[])
+{
   fprintf (fp, "Usage:\n");
   fprintf (fp, "  %s [options] [--] cmd [arg ...]\n", argv[0]);
   fprintf (fp, "\n");
@@ -31,6 +33,7 @@ print_usage (FILE * fp, int argc, char *argv[])
   fprintf (fp, "  -a            : append output file\n");
   fprintf (fp, "  -n            : test run\n");
   fprintf (fp, "  -p            : punchhole after read\n");
+  fprintf (fp, "  -V            : show version\n");
   fprintf (fp, "  -h            : show usage\n");
   fprintf (fp, "\n");
 }
@@ -94,7 +97,7 @@ main (int argc, char *argv[])
 
   while (1)
     {
-      int c = getopt (argc, argv, "+i:o:f:r:anph");
+      int c = getopt (argc, argv, "+i:o:f:r:anpVh");
       if (c == -1)
 	break;
       switch (c)
@@ -121,10 +124,15 @@ main (int argc, char *argv[])
 	case 'p':
 	  punchhole = 1;
 	  break;
+	case 'V':
+	  print_version (stdout);
+	  exit (EXIT_SUCCESS);
 	case 'h':
+	  print_version (stdout);
 	  print_usage (stdout, argc, argv);
 	  exit (EXIT_SUCCESS);
 	default:
+	  print_usage (stderr, argc, argv);
 	  exit (EXIT_FAILURE);
 	}
     }
