@@ -43,8 +43,16 @@ print_usage (FILE * fp, int argc, char *argv[])
   fprintf (fp, "  -V            : show version\n");
   fprintf (fp, "  -h            : show usage\n");
   fprintf (fp, "\n");
-  fprintf (fp, " NOTE: < and > must escape or quote on shell\n");
-  fprintf (fp, "   ex. \\<, '<' or \"<\".\n");
+  fprintf (fp, "  NOTE: You can use same file for input and output.\n");
+  fprintf (fp, "        It writes to output file only read position to safe read.\n");
+  fprintf (fp, "        But you shouldn't output widely incresed size data against input\n");
+  fprintf (fp, "        when you use same file for input and output.\n");
+  fprintf (fp, "        It would be stopped program because the all buffer consumed\n");
+  fprintf (fp, "        to wait forever writing for read position on the file.\n");
+  fprintf (fp, "\n");
+  fprintf (fp, "  NOTE: < and > must escape or quote on shell.\n");
+  fprintf (fp, "    example:\n");
+  fprintf (fp, "      %s -p -r hugefile.txt.gz gzip -c '<hugefile.txt' \\> hugefile.txt\n", argv[0]);
   fprintf (fp, "\n");
 }
 
