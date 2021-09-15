@@ -24,17 +24,12 @@ static void
 print_usage (FILE * fp, int argc, char *argv[])
 {
   fprintf (fp, "Usage:\n");
-  fprintf (fp, "  %s [options] [--] cmd [arg ...]\n", argv[0]);
+  fprintf (fp, "  %s [options] [--] cmd [arg ...] [redirects]\n", argv[0]);
   fprintf (fp, "\n");
   fprintf (fp, "Options:\n");
   fprintf (fp, "  -i infile     : input file\n");
-  fprintf (fp, "  < infile      : input file\n");
   fprintf (fp, "  -o outfile    : output file\n");
-  fprintf (fp, "  > outfile     : output file\n");
-  fprintf (fp, "  >> outfile    : output file (append mode)\n");
   fprintf (fp, "  -f inoutfile  : input/output file\n");
-  fprintf (fp, "  <> inoutfile  : input/output file\n");
-  fprintf (fp, "  <>> inoutfile : input/output file (append mode)\n");
   fprintf (fp, "  -r renamefile : rename output file\n");
   fprintf (fp, "  -a            : append mode\n");
   fprintf (fp, "  -n            : test mode (don't write to output file)\n");
@@ -43,16 +38,29 @@ print_usage (FILE * fp, int argc, char *argv[])
   fprintf (fp, "  -V            : show version\n");
   fprintf (fp, "  -h            : show usage\n");
   fprintf (fp, "\n");
+  fprintf (fp, "Redirects:\n");
+  fprintf (fp, "  < infile      : input file\n");
+  fprintf (fp, "  > outfile     : output file\n");
+  fprintf (fp, "  >> outfile    : output file (append mode)\n");
+  fprintf (fp, "  <> inoutfile  : input/output file\n");
+  fprintf (fp, "  <>> inoutfile : input/output file (append mode)\n");
+  fprintf (fp, "\n");
   fprintf (fp, "  NOTE: You can use same file for input and output.\n");
-  fprintf (fp, "        It writes to output file only read position to safe read.\n");
-  fprintf (fp, "        But you shouldn't output widely incresed size data against input\n");
+  fprintf (fp,
+	   "        It writes to output file only read position to safe read.\n");
+  fprintf (fp,
+	   "        But you shouldn't output widely incresed size data against input\n");
   fprintf (fp, "        when you use same file for input and output.\n");
-  fprintf (fp, "        It would be stopped program because the all buffer consumed\n");
-  fprintf (fp, "        to wait forever writing for read position on the file.\n");
+  fprintf (fp,
+	   "        It would be stopped program because the all buffer consumed\n");
+  fprintf (fp,
+	   "        to wait forever writing for read position on the file.\n");
   fprintf (fp, "\n");
   fprintf (fp, "  NOTE: < and > must escape or quote on shell.\n");
   fprintf (fp, "    example:\n");
-  fprintf (fp, "      %s -p -r hugefile.txt.gz gzip -c '<hugefile.txt' \\> hugefile.txt\n", argv[0]);
+  fprintf (fp,
+	   "      %s -p -r hugefile.txt.gz gzip -c '<hugefile.txt' \\> hugefile.txt\n",
+	   argv[0]);
   fprintf (fp, "\n");
 }
 
