@@ -10,6 +10,7 @@
 #include <inttypes.h>
 #include <sys/wait.h>
 #include <errno.h>
+#include <ctype.h>
 
 #include "config.h"
 
@@ -104,6 +105,86 @@ main (int argc, char *argv[])
   int punchhole = 0;
   int overwrite = 0;
 
+  optind = 1;
+  for (int i = 1; i < argc; i++)
+    {
+      // "\\<...", "\\>..." or "\\\\..." is escaped argument
+      if (argv[i][0] == '\\'
+	  && (argv[i][1] == '<' || argv[i][1] == '>' || argv[i][1] == '\\'))
+	{
+	  argv[i]++;
+	  continue;
+	}
+      // <>>...
+      // <>...
+      if (argv[i][0] == '<' || argv[i][0] == '>')
+	{
+	  int in = 0;
+	  int out = 0;
+	  const char *file = argv[i];
+	  int rargc = 0;
+	  char *rargv[2];
+	  char op[4];
+	  char *o = op;
+
+	  rargv[rargc++] = argv[i];
+	  if (*file == '<')
+	    {
+	      in = 1;
+	      *o++ = *file;
+	      file++;
+	    }
+	  if (*file == '>')
+	    {
+	      out = 1;
+	      *o++ = *file;
+	      file++;
+	    }
+	  if (*file == '>')
+	    {
+	      append = 1;
+	      *o++ = *file;
+	      file++;
+	    }
+	  *o = '\0';
+	  while (isspace (*file))
+	    file++;
+	  if (*file == '\0')
+	    {
+	      i++;
+	      if (i >= argc)
+		{
+		  fprintf (stderr, "no file specified for %s\n", op);
+		  print_usage (stderr, argc, argv);
+		  exit (EXIT_FAILURE);
+		}
+	      rargv[rargc++] = argv[i];
+	      file = argv[i];
+	    }
+	  if (in && ifile != NULL)
+	    {
+	      fprintf (stderr, "cannot set input file twice or more\n");
+	      print_usage (stderr, argc, argv);
+	      exit (EXIT_FAILURE);
+	    }
+	  if (out && ofile != NULL)
+	    {
+	      fprintf (stderr, "cannot set output file twice or more\n");
+	      print_usage (stderr, argc, argv);
+	      exit (EXIT_FAILURE);
+	    }
+	  if (in)
+	    ifile = file;
+	  if (out)
+	    ofile = file;
+	  memmove (argv + optind + rargc, argv + optind,
+		   sizeof (char *) * (i - optind));
+	  memcpy (argv + optind, rargv, sizeof (char *) * rargc);
+	  optind += rargc;
+	  continue;
+	}
+    }
+
   while (1)
     {
       int c = getopt (argc, argv, "+i:o:f:r:anpVh");
@@ -115,6 +196,7 @@ main (int argc, char *argv[])
 	  if (ifile != NULL)
 	    {
 	      fprintf (stderr, "cannot set input file twice or more\n");
+	      print_usage (stderr, argc, argv);
 	      exit (EXIT_FAILURE);
 	    }
 	  ifile = optarg;
@@ -123,6 +205,7 @@ main (int argc, char *argv[])
 	  if (ofile != NULL)
 	    {
 	      fprintf (stderr, "cannot set output file twice or more\n");
+	      print_usage (stderr, argc, argv);
 	      exit (EXIT_FAILURE);
 	    }
 	  ofile = optarg;
@@ -131,11 +214,13 @@ main (int argc, char *argv[])
 	  if (ifile != NULL)
 	    {
 	      fprintf (stderr, "cannot set input file twice or more\n");
+	      print_usage (stderr, argc, argv);
 	      exit (EXIT_FAILURE);
 	    }
 	  if (ofile != NULL)
 	    {
 	      fprintf (stderr, "cannot set output file twice or more\n");
+	      print_usage (stderr, argc, argv);
 	      exit (EXIT_FAILURE);
 	    }
 	  ifile = optarg;
@@ -145,6 +230,7 @@ main (int argc, char *argv[])
 	  if (rfile != NULL)
 	    {
 	      fprintf (stderr, "cannot set rename file twice or more\n");
+	      print_usage (stderr, argc, argv);
 	      exit (EXIT_FAILURE);
 	    }
 	  rfile = optarg;
@@ -153,6 +239,7 @@ main (int argc, char *argv[])
 	  if (append)
 	    {
 	      fprintf (stderr, "cannot set append mode twice or more\n");
+	      print_usage (stderr, argc, argv);
 	      exit (EXIT_FAILURE);
 	    }
 	  append = 1;
@@ -161,6 +248,7 @@ main (int argc, char *argv[])
 	  if (test)
 	    {
 	      fprintf (stderr, "cannot set test mode twice or more\n");
+	      print_usage (stderr, argc, argv);
 	      exit (EXIT_FAILURE);
 	    }
 	  test = 1;
@@ -169,6 +257,7 @@ main (int argc, char *argv[])
 	  if (punchhole)
 	    {
 	      fprintf (stderr, "cannot set punchhole mode twice or more\n");
+	      print_usage (stderr, argc, argv);
 	      exit (EXIT_FAILURE);
 	    }
 	  punchhole = 1;
@@ -183,100 +272,6 @@ main (int argc, char *argv[])
 	default:
 	  print_usage (stderr, argc, argv);
 	  exit (EXIT_FAILURE);
-	}
-    }
-  while (optind < argc)
-    {
-      if (argv[optind][0] == '<')
-	{
-	  char opt[4] = "<";
-	  int ioboth = 0;
-	  int lappend = 0;
-	  const char *ifile_new = argv[optind] + 1;
-	  if (*ifile_new == '>')
-	    {
-	      ioboth = 1;
-	      opt[1] = '>';
-	      opt[2] = '\0';
-	      ifile_new++;
-	    }
-	  if (*ifile_new == '>')
-	    {
-	      lappend = 1;
-	      opt[2] = '>';
-	      opt[3] = '\0';
-	      ifile_new++;
-	    }
-	  if (append && !lappend)
-	    {
-	      fprintf (stderr, "cannot use %s with append mode\n", opt);
-	      exit (EXIT_FAILURE);
-	    }
-	  append = lappend;
-	  if (*ifile_new == '\0')
-	    {
-	      optind++;
-	      if (optind >= argc)
-		{
-		  fprintf (stderr, "no file specified for %s\n", opt);
-		  exit (EXIT_FAILURE);
-		}
-	      ifile_new = argv[optind];
-	    }
-	  if (ifile != NULL)
-	    {
-	      fprintf (stderr, "cannot set input file twice or more\n");
-	      exit (EXIT_FAILURE);
-	    }
-	  ifile = ifile_new;
-	  if (ioboth)
-	    {
-	      if (ofile != NULL)
-		{
-		  fprintf (stderr, "cannot set output file twice or more\n");
-		  exit (EXIT_FAILURE);
-		}
-	      ofile = ifile_new;
-	    }
-	  optind++;
-	  continue;
-	}
-      if (argv[optind][0] == '>')
-	{
-	  char opt[3] = ">";
-	  const char *ofile_new = argv[optind] + 1;
-	  int lappend = 0;
-	  if (*ofile_new == '>')
-	    {
-	      lappend = 1;
-	      opt[1] = '>';
-	      opt[2] = '\0';
-	      ofile_new++;
-	    }
-	  if (*ofile_new == '\0')
-	    {
-	      optind++;
-	      if (optind >= argc)
-		{
-		  fprintf (stderr, "no file specified for %s\n", opt);
-		  exit (EXIT_FAILURE);
-		}
-	      ofile_new = argv[optind];
-	    }
-	  if (append && !lappend)
-	    {
-	      fprintf (stderr, "cannot use %s with append mode\n", opt);
-	      exit (EXIT_FAILURE);
-	    }
-	  append = lappend;
-	  if (ofile != NULL)
-	    {
-	      fprintf (stderr, "cannot set output file twice or more\n");
-	      exit (EXIT_FAILURE);
-	    }
-	  ofile = ofile_new;
-	  optind++;
-	  continue;
 	}
     }
 
