@@ -26,17 +26,24 @@ print_usage (FILE * fp, int argc, char *argv[])
   fprintf (fp, "  %s [options] [--] cmd [arg ...]\n", argv[0]);
   fprintf (fp, "\n");
   fprintf (fp, "Options:\n");
-  fprintf (fp, "  -i infile     : input         file [<stdin>]\n");
-  fprintf (fp, "  \\< infile     : input         file [<stdin>]\n");
-  fprintf (fp, "  -o outfile    : output        file [<stdout>]\n");
-  fprintf (fp, "  \\> outfile    : output        file [<stdout>]\n");
-  fprintf (fp, "  -f inoutfile  : input/output  file\n");
+  fprintf (fp, "  -i infile     : input file\n");
+  fprintf (fp, "  < infile      : input file\n");
+  fprintf (fp, "  -o outfile    : output file\n");
+  fprintf (fp, "  > outfile     : output file\n");
+  fprintf (fp, "  >> outfile    : output file (append mode)\n");
+  fprintf (fp, "  -f inoutfile  : input/output file\n");
+  fprintf (fp, "  <> inoutfile  : input/output file\n");
+  fprintf (fp, "  <>> inoutfile : input/output file (append mode)\n");
   fprintf (fp, "  -r renamefile : rename output file\n");
-  fprintf (fp, "  -a            : append output file\n");
-  fprintf (fp, "  -n            : test run\n");
-  fprintf (fp, "  -p            : punchhole after read\n");
+  fprintf (fp, "  -a            : append mode\n");
+  fprintf (fp, "  -n            : test mode (don't write to output file)\n");
+  fprintf (fp,
+	   "  -p            : punchhole mode (punchhole read data on input file)\n");
   fprintf (fp, "  -V            : show version\n");
   fprintf (fp, "  -h            : show usage\n");
+  fprintf (fp, "\n");
+  fprintf (fp, " NOTE: < and > must escape or quote on shell\n");
+  fprintf (fp, "   ex. \\<, '<' or \"<\".\n");
   fprintf (fp, "\n");
 }
 
@@ -145,15 +152,25 @@ main (int argc, char *argv[])
 	case 'a':
 	  if (append)
 	    {
-	      fprintf (stderr, "cannot set append option twice or more\n");
+	      fprintf (stderr, "cannot set append mode twice or more\n");
 	      exit (EXIT_FAILURE);
 	    }
 	  append = 1;
 	  break;
 	case 'n':
+	  if (test)
+	    {
+	      fprintf (stderr, "cannot set test mode twice or more\n");
+	      exit (EXIT_FAILURE);
+	    }
 	  test = 1;
 	  break;
 	case 'p':
+	  if (punchhole)
+	    {
+	      fprintf (stderr, "cannot set punchhole mode twice or more\n");
+	      exit (EXIT_FAILURE);
+	    }
 	  punchhole = 1;
 	  break;
 	case 'V':
@@ -172,13 +189,36 @@ main (int argc, char *argv[])
     {
       if (argv[optind][0] == '<')
 	{
+	  char opt[4] = "<";
+	  int ioboth = 0;
+	  int lappend = 0;
 	  const char *ifile_new = argv[optind] + 1;
+	  if (*ifile_new == '>')
+	    {
+	      ioboth = 1;
+	      opt[1] = '>';
+	      opt[2] = '\0';
+	      ifile_new++;
+	    }
+	  if (*ifile_new == '>')
+	    {
+	      lappend = 1;
+	      opt[2] = '>';
+	      opt[3] = '\0';
+	      ifile_new++;
+	    }
+	  if (append && !lappend)
+	    {
+	      fprintf (stderr, "cannot use %s with append mode\n", opt);
+	      exit (EXIT_FAILURE);
+	    }
+	  append = lappend;
 	  if (*ifile_new == '\0')
 	    {
 	      optind++;
 	      if (optind >= argc)
 		{
-		  fprintf (stderr, "no file specified for \\<\n");
+		  fprintf (stderr, "no file specified for %s\n", opt);
 		  exit (EXIT_FAILURE);
 		}
 	      ifile_new = argv[optind];
@@ -189,22 +229,46 @@ main (int argc, char *argv[])
 	      exit (EXIT_FAILURE);
 	    }
 	  ifile = ifile_new;
+	  if (ioboth)
+	    {
+	      if (ofile != NULL)
+		{
+		  fprintf (stderr, "cannot set output file twice or more\n");
+		  exit (EXIT_FAILURE);
+		}
+	      ofile = ifile_new;
+	    }
 	  optind++;
 	  continue;
 	}
       if (argv[optind][0] == '>')
 	{
+	  char opt[3] = ">";
 	  const char *ofile_new = argv[optind] + 1;
+	  int lappend = 0;
+	  if (*ofile_new == '>')
+	    {
+	      lappend = 1;
+	      opt[1] = '>';
+	      opt[2] = '\0';
+	      ofile_new++;
+	    }
 	  if (*ofile_new == '\0')
 	    {
 	      optind++;
 	      if (optind >= argc)
 		{
-		  fprintf (stderr, "no file specified for \\>\n");
+		  fprintf (stderr, "no file specified for %s\n", opt);
 		  exit (EXIT_FAILURE);
 		}
 	      ofile_new = argv[optind];
 	    }
+	  if (append && !lappend)
+	    {
+	      fprintf (stderr, "cannot use %s with append mode\n", opt);
+	      exit (EXIT_FAILURE);
+	    }
+	  append = lappend;
 	  if (ofile != NULL)
 	    {
 	      fprintf (stderr, "cannot set output file twice or more\n");
