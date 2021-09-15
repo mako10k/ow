@@ -27,7 +27,9 @@ print_usage (FILE * fp, int argc, char *argv[])
   fprintf (fp, "\n");
   fprintf (fp, "Options:\n");
   fprintf (fp, "  -i infile     : input         file [<stdin>]\n");
+  fprintf (fp, "  \\< infile     : input         file [<stdin>]\n");
   fprintf (fp, "  -o outfile    : output        file [<stdout>]\n");
+  fprintf (fp, "  \\> outfile    : output        file [<stdout>]\n");
   fprintf (fp, "  -f inoutfile  : input/output  file\n");
   fprintf (fp, "  -r renamefile : rename output file\n");
   fprintf (fp, "  -a            : append output file\n");
@@ -56,7 +58,7 @@ getfilename (int fd)
       perror ("realloc");
       exit (EXIT_FAILURE);
     }
-  ssize_t ret = readlink (path, buf, st.st_size + 1);
+  ssize_t ret = readlink (path, buf, st.st_size);
   buf[ret] = '\0';
   return buf;
 }
@@ -103,19 +105,49 @@ main (int argc, char *argv[])
       switch (c)
 	{
 	case 'i':
+	  if (ifile != NULL)
+	    {
+	      fprintf (stderr, "cannot set input file twice or more\n");
+	      exit (EXIT_FAILURE);
+	    }
 	  ifile = optarg;
 	  break;
 	case 'o':
+	  if (ofile != NULL)
+	    {
+	      fprintf (stderr, "cannot set output file twice or more\n");
+	      exit (EXIT_FAILURE);
+	    }
 	  ofile = optarg;
 	  break;
 	case 'f':
+	  if (ifile != NULL)
+	    {
+	      fprintf (stderr, "cannot set input file twice or more\n");
+	      exit (EXIT_FAILURE);
+	    }
+	  if (ofile != NULL)
+	    {
+	      fprintf (stderr, "cannot set output file twice or more\n");
+	      exit (EXIT_FAILURE);
+	    }
 	  ifile = optarg;
 	  ofile = optarg;
 	  break;
 	case 'r':
+	  if (rfile != NULL)
+	    {
+	      fprintf (stderr, "cannot set rename file twice or more\n");
+	      exit (EXIT_FAILURE);
+	    }
 	  rfile = optarg;
 	  break;
 	case 'a':
+	  if (append)
+	    {
+	      fprintf (stderr, "cannot set append option twice or more\n");
+	      exit (EXIT_FAILURE);
+	    }
 	  append = 1;
 	  break;
 	case 'n':
@@ -136,6 +168,53 @@ main (int argc, char *argv[])
 	  exit (EXIT_FAILURE);
 	}
     }
+  while (optind < argc)
+    {
+      if (argv[optind][0] == '<')
+	{
+	  const char *ifile_new = argv[optind] + 1;
+	  if (*ifile_new == '\0')
+	    {
+	      optind++;
+	      if (optind >= argc)
+		{
+		  fprintf (stderr, "no file specified for \\<\n");
+		  exit (EXIT_FAILURE);
+		}
+	      ifile_new = argv[optind];
+	    }
+	  if (ifile != NULL)
+	    {
+	      fprintf (stderr, "cannot set input file twice or more\n");
+	      exit (EXIT_FAILURE);
+	    }
+	  ifile = ifile_new;
+	  optind++;
+	  continue;
+	}
+      if (argv[optind][0] == '>')
+	{
+	  const char *ofile_new = argv[optind] + 1;
+	  if (*ofile_new == '\0')
+	    {
+	      optind++;
+	      if (optind >= argc)
+		{
+		  fprintf (stderr, "no file specified for \\>\n");
+		  exit (EXIT_FAILURE);
+		}
+	      ofile_new = argv[optind];
+	    }
+	  if (ofile != NULL)
+	    {
+	      fprintf (stderr, "cannot set output file twice or more\n");
+	      exit (EXIT_FAILURE);
+	    }
+	  ofile = ofile_new;
+	  optind++;
+	  continue;
+	}
+    }
 
   int ifd = STDIN_FILENO;
   int ofd = STDOUT_FILENO;
@@ -146,7 +225,7 @@ main (int argc, char *argv[])
       if (punchhole && !test)
 	flags = O_RDWR | O_CLOEXEC;
       else
-	flags = O_RDONLY;
+	flags = O_RDONLY | O_CLOEXEC;
       ifd = open (ifile, flags, 0666);
       if (ifd == -1)
 	{
