@@ -538,7 +538,7 @@ main (int argc, char *argv[])
       if (FD_ISSET (ifd, &rfds))
 	{
 	  size_t rsize = ist.st_blksize - isize;
-	  if (overwrite && !append && ist.st_size - ipos < rsize)
+	  if (overwrite && append && ist.st_size - ipos < rsize)
 	    rsize = ist.st_size - ipos;
 	  ssize_t sz = rsize == 0 ? 0 : read (ifd, ibuf + isize, rsize);
 	  if (sz == -1)
