@@ -62,6 +62,11 @@ print_usage (FILE * fp, int argc, char *argv[])
 	   "      %s -p -r hugefile.txt.gz gzip -c '<hugefile.txt' \\> hugefile.txt\n",
 	   argv[0]);
   fprintf (fp, "\n");
+  fprintf (fp,
+	   "  NOTE: Using same file for input and output or punchhole option\n");
+  fprintf (fp, "        may destructive.\n");
+  fprintf (fp, "        Please use -n option before actual running.\n");
+  fprintf (fp, "\n");
 }
 
 static const char *
