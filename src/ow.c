@@ -173,7 +173,7 @@ pump_splice (int fds[2], off_t size)
       if (size_to_splice == 0)
 	exit (EXIT_SUCCESS);
       ssize_t size_spliced =
-	splice (fds[0], NULL, fds[0], NULL, size_to_splice, 0);
+	splice (fds[0], NULL, fds[1], NULL, size_to_splice, 0);
       if (size_spliced == -1)
 	{
 	  perror ("splice");
