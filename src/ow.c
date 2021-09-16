@@ -11,8 +11,11 @@
 #include <sys/wait.h>
 #include <errno.h>
 #include <ctype.h>
+#include <sys/sendfile.h>
 
 #include "config.h"
+
+#define OFF_MAX (~((off_t)1<<(sizeof(off_t)*8-1)))
 
 static void
 print_version (FILE * fp)
@@ -21,7 +24,7 @@ print_version (FILE * fp)
 }
 
 static void
-print_usage (FILE * fp, int argc, char *argv[])
+print_usage (FILE * fp, int argc, char *const argv[])
 {
   fprintf (fp, "Usage:\n");
   fprintf (fp, "  %s [options] [--] cmd [arg ...] [redirects]\n", argv[0]);
@@ -69,6 +72,7 @@ print_usage (FILE * fp, int argc, char *argv[])
   fprintf (fp, "\n");
 }
 
+static const char *getfilename (int) __attribute__((malloc));
 static const char *
 getfilename (int fd)
 {
@@ -115,53 +119,105 @@ getrelative (const char *path)
   return path;
 }
 
-static void pump (void) __attribute__((noreturn));
+static void pump (int, int, off_t, size_t) __attribute__((noreturn));
 
 static void
-pump (void)
+pump (int ifd, int ofd, off_t size, size_t size_buf)
 {
-  char buf[PIPE_BUF];
-  while (1)
+  char buf[size_buf];
+  off_t size_transfered = 0;
+  while (size_transfered < size)
     {
-      ssize_t rsize = read (STDIN_FILENO, buf, PIPE_BUF);
-      if (rsize == -1)
+      size_t size_to_read =
+	size - size_transfered > size_buf ? size_buf : size - size_transfered;
+      if (size_to_read == 0)
+	exit (EXIT_SUCCESS);
+      ssize_t size_read = read (ifd, buf, size_to_read);
+      if (size_read == -1)
 	{
 	  perror ("read");
 	  exit (EXIT_FAILURE);
 	}
-      if (rsize == 0)
+      if (size_read == 0)
 	exit (EXIT_SUCCESS);
-      ssize_t wsize = write (STDOUT_FILENO, buf, rsize);
-      if (wsize == -1)
+      ssize_t size_written = write (ofd, buf, size_read);
+      if (size_written == -1)
 	{
 	  perror ("write");
 	  exit (EXIT_FAILURE);
 	}
-      if (wsize < rsize)
-	{
-	  fprintf (stderr, "short read from pipe\n");
-	  exit (EXIT_FAILURE);
-	}
+      size_transfered += size_written;
     }
+  exit (EXIT_SUCCESS);
 }
 
-int
-main (int argc, char *argv[])
-{
-  const char *ifile = NULL;
-  const char *ofile = NULL;
-  const char *rfile = NULL;
-  int append = 0;
-  int test = 0;
-  int punchhole = 0;
-  int overwrite = 0;
+static void pump_splice (int, int, off_t, off_t) __attribute__((noreturn));
 
-  optind = 1;
+static void
+pump_splice (int ifd, int ofd, off_t size, off_t ooff)
+{
+  off_t size_transfered = 0;
+  while (size_transfered < size)
+    {
+      size_t size_to_splice =
+	size - size_transfered > SIZE_MAX ? SIZE_MAX : size - size_transfered;
+      if (size_to_splice == 0)
+	exit (EXIT_SUCCESS);
+      ssize_t size_spliced =
+	splice (ifd, NULL, ofd, &ooff, size_to_splice, 0);
+      if (size_spliced == -1)
+	{
+	  perror ("splice");
+	  exit (EXIT_FAILURE);
+	}
+      if (size_spliced == 0)
+	exit (EXIT_SUCCESS);
+      size_transfered += size_spliced;
+    }
+  exit (EXIT_SUCCESS);
+}
+
+static void pump_sendfile (int, int, off_t, off_t) __attribute__((noreturn));
+
+static void
+pump_sendfile (int ifd, int ofd, off_t size, off_t ooff)
+{
+  if (lseek (ofd, ooff, SEEK_SET) == (off_t) - 1)
+    {
+      perror ("lseek");
+      exit (EXIT_FAILURE);
+    }
+  off_t size_transfered = 0;
+  while (size_transfered < size)
+    {
+      size_t size_to_send =
+	size - size_transfered > SIZE_MAX ? SIZE_MAX : size - size_transfered;
+      if (size_to_send == 0)
+	exit (EXIT_SUCCESS);
+      ssize_t size_sent = sendfile (ofd, ifd, NULL, size_to_send);
+      if (size_sent == -1)
+	{
+	  perror ("sendfile");
+	  exit (EXIT_FAILURE);
+	}
+      if (size_sent == 0)
+	exit (EXIT_SUCCESS);
+      size_transfered += size_sent;
+    }
+  exit (EXIT_SUCCESS);
+}
+
+static void
+parse_redirect (int argc, char **const argv, const char * *ifile,
+		const char * *ofile, int *append)
+{
   for (int i = 1; i < argc; i++)
     {
-      // "\\<...", "\\>..." or "\\\\..." is escaped argument
+      // "\\<...", "\\>...", "\\\\<..." or "\\\\>..." is escaped argument
       if (argv[i][0] == '\\'
-	  && (argv[i][1] == '<' || argv[i][1] == '>' || argv[i][1] == '\\'))
+	  && (argv[i][1] == '<' || argv[i][1] == '>'
+	      || (argv[i][1] == '\\'
+		  && (argv[i][2] == '<' || argv[i][2] == '>'))))
 	{
 	  argv[i]++;
 	  continue;
@@ -193,7 +249,7 @@ main (int argc, char *argv[])
 	    }
 	  if (*file == '>')
 	    {
-	      append = 1;
+	      *append = 1;
 	      *o++ = *file;
 	      file++;
 	    }
@@ -212,22 +268,22 @@ main (int argc, char *argv[])
 	      rargv[rargc++] = argv[i];
 	      file = argv[i];
 	    }
-	  if (in && ifile != NULL)
+	  if (in && *ifile != NULL)
 	    {
 	      fprintf (stderr, "cannot set input file twice or more\n");
 	      print_usage (stderr, argc, argv);
 	      exit (EXIT_FAILURE);
 	    }
-	  if (out && ofile != NULL)
+	  if (out && *ofile != NULL)
 	    {
 	      fprintf (stderr, "cannot set output file twice or more\n");
 	      print_usage (stderr, argc, argv);
 	      exit (EXIT_FAILURE);
 	    }
 	  if (in)
-	    ifile = file;
+	    *ifile = file;
 	  if (out)
-	    ofile = file;
+	    *ofile = file;
 	  memmove (argv + optind + rargc, argv + optind,
 		   sizeof (char *) * (i - optind));
 	  memcpy (argv + optind, rargv, sizeof (char *) * rargc);
@@ -235,7 +291,20 @@ main (int argc, char *argv[])
 	  continue;
 	}
     }
+}
 
+int
+main (int argc, char *argv[])
+{
+  const char *ifile = NULL;
+  const char *ofile = NULL;
+  const char *rfile = NULL;
+  int append = 0;
+  int test = 0;
+  int punchhole = 0;
+  int overwrite = 0;
+
+  parse_redirect (argc, argv, &ifile, &ofile, &append);
   while (1)
     {
       int c = getopt (argc, argv, "+i:o:f:r:anpVh");
@@ -404,6 +473,29 @@ main (int argc, char *argv[])
 	  exit (EXIT_FAILURE);
 	}
     }
+  if (argc <= optind && (S_ISFIFO (ist.st_mode) || S_ISFIFO (ost.st_mode)))
+    {
+      off_t size = OFF_MAX;
+      off_t ooff = 0;
+      if (S_ISREG (ist.st_mode) && append)
+	{
+	  size = ist.st_size;
+	  ooff = ost.st_size;
+	}
+      pump_splice (ifd, ofd, size, ooff);
+    }
+  if (argc <= optind && S_ISREG (ist.st_mode))
+    {
+      off_t size = OFF_MAX;
+      off_t ooff = 0;
+      if (S_ISREG (ist.st_mode) && append)
+	{
+	  size = ist.st_size;
+	  ooff = ost.st_size;
+	  pump (ifd, ofd, size, PIPE_BUF);
+	}
+      pump_sendfile (ifd, ofd, size, ooff);
+    }
   int ipfds[2];
   int opfds[2];
   if (pipe (ipfds) == -1)
@@ -436,8 +528,6 @@ main (int argc, char *argv[])
 	  dup2 (opfds[1], STDOUT_FILENO);
 	  close (opfds[1]);
 	}
-      if (argc <= optind)
-	pump ();
       execvp (argv[optind], argv + optind);
       perror (argv[optind]);
       exit (EXIT_FAILURE);
