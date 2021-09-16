@@ -17,6 +17,17 @@
 
 #define OFF_MAX (~((off_t)1<<(sizeof(off_t)*8-1)))
 
+struct opt
+{
+  const char *file_input;
+  const char *file_output;
+  const char *file_rename;
+  int append:1;
+  int punchhole:1;
+  int input_open:1;
+  int output_open:1;
+};
+
 static void
 print_version (FILE * fp)
 {
@@ -35,7 +46,6 @@ print_usage (FILE * fp, int argc, char *const argv[])
   fprintf (fp, "  -f inoutfile  : input/output file\n");
   fprintf (fp, "  -r renamefile : rename output file\n");
   fprintf (fp, "  -a            : append mode\n");
-  fprintf (fp, "  -n            : test mode (don't write to output file)\n");
   fprintf (fp,
 	   "  -p            : punchhole mode (punchhole read data on input file)\n");
   fprintf (fp, "  -V            : show version\n");
@@ -68,7 +78,6 @@ print_usage (FILE * fp, int argc, char *const argv[])
   fprintf (fp,
 	   "  NOTE: Using same file for input and output or punchhole option\n");
   fprintf (fp, "        may destructive.\n");
-  fprintf (fp, "        Please use -n option before actual running.\n");
   fprintf (fp, "\n");
 }
 
@@ -119,11 +128,10 @@ getrelative (const char *path)
   return path;
 }
 
-static void pump_read_write (int, int, off_t, size_t)
-  __attribute__((noreturn));
+static void pump_read_write (int[2], off_t, size_t) __attribute__((noreturn));
 
 static void
-pump_read_write (int ifd, int ofd, off_t size, size_t size_buf)
+pump_read_write (int fds[2], off_t size, size_t size_buf)
 {
   char buf[size_buf];
   off_t size_transfered = 0;
@@ -133,7 +141,7 @@ pump_read_write (int ifd, int ofd, off_t size, size_t size_buf)
 	size - size_transfered > size_buf ? size_buf : size - size_transfered;
       if (size_to_read == 0)
 	exit (EXIT_SUCCESS);
-      ssize_t size_read = read (ifd, buf, size_to_read);
+      ssize_t size_read = read (fds[0], buf, size_to_read);
       if (size_read == -1)
 	{
 	  perror ("read");
@@ -141,7 +149,7 @@ pump_read_write (int ifd, int ofd, off_t size, size_t size_buf)
 	}
       if (size_read == 0)
 	exit (EXIT_SUCCESS);
-      ssize_t size_written = write (ofd, buf, size_read);
+      ssize_t size_written = write (fds[1], buf, size_read);
       if (size_written == -1)
 	{
 	  perror ("write");
@@ -152,10 +160,10 @@ pump_read_write (int ifd, int ofd, off_t size, size_t size_buf)
   exit (EXIT_SUCCESS);
 }
 
-static void pump_splice (int, int, off_t) __attribute__((noreturn));
+static void pump_splice (int[2], off_t) __attribute__((noreturn));
 
 static void
-pump_splice (int ifd, int ofd, off_t size)
+pump_splice (int fds[2], off_t size)
 {
   off_t size_transfered = 0;
   while (size_transfered < size)
@@ -164,7 +172,8 @@ pump_splice (int ifd, int ofd, off_t size)
 	size - size_transfered > SIZE_MAX ? SIZE_MAX : size - size_transfered;
       if (size_to_splice == 0)
 	exit (EXIT_SUCCESS);
-      ssize_t size_spliced = splice (ifd, NULL, ofd, NULL, size_to_splice, 0);
+      ssize_t size_spliced =
+	splice (fds[0], NULL, fds[0], NULL, size_to_splice, 0);
       if (size_spliced == -1)
 	{
 	  perror ("splice");
@@ -177,10 +186,10 @@ pump_splice (int ifd, int ofd, off_t size)
   exit (EXIT_SUCCESS);
 }
 
-static void pump_sendfile (int, int, off_t) __attribute__((noreturn));
+static void pump_sendfile (int[2], off_t) __attribute__((noreturn));
 
 static void
-pump_sendfile (int ifd, int ofd, off_t size)
+pump_sendfile (int fds[2], off_t size)
 {
   off_t size_transfered = 0;
   while (size_transfered < size)
@@ -189,7 +198,7 @@ pump_sendfile (int ifd, int ofd, off_t size)
 	size - size_transfered > SIZE_MAX ? SIZE_MAX : size - size_transfered;
       if (size_to_send == 0)
 	exit (EXIT_SUCCESS);
-      ssize_t size_sent = sendfile (ofd, ifd, NULL, size_to_send);
+      ssize_t size_sent = sendfile (fds[1], fds[0], NULL, size_to_send);
       if (size_sent == -1)
 	{
 	  perror ("sendfile");
@@ -202,57 +211,44 @@ pump_sendfile (int ifd, int ofd, off_t size)
   exit (EXIT_SUCCESS);
 }
 
-static void pump (int, struct stat *, int, struct stat *, int, int)
-  __attribute__((noreturn));
+static void pump (int[2]) __attribute__((noreturn));
 
 static void
-pump (int ifd, struct stat *ist, int ofd, struct stat *ost, int append,
-      int overwrite)
+pump (int fds[2])
 {
-  struct stat stbufs[2];
-  int recheck_overwrite = 0;
-  if (ist == NULL)
+  struct stat st[2];
+  if (fstat (fds[0], st + 0) == -1)
     {
-      if (fstat (ifd, stbufs) == -1)
-	{
-	  perror ("fstat");
-	  exit (EXIT_FAILURE);
-	}
-      ist = stbufs;
-      recheck_overwrite = 1;
+      perror ("fstat");
+      exit (EXIT_FAILURE);
     }
-  if (ost == NULL)
+  if (fstat (fds[1], st + 1) == -1)
     {
-      if (fstat (ofd, stbufs + 1) == -1)
-	{
-	  perror ("fstat");
-	  exit (EXIT_FAILURE);
-	}
-      ost = stbufs + 1;
-      recheck_overwrite = 1;
-      int flags = fcntl (ofd, F_GETFL);
-      if (flags == -1)
-	{
-	  perror ("fcntl(..., F_GETFL)");
-	  exit (EXIT_FAILURE);
-	}
-      append = (flags & O_APPEND) != 0;
+      perror ("fstat");
+      exit (EXIT_FAILURE);
     }
-  if (recheck_overwrite)
-    overwrite = S_ISREG (ist->st_mode) && S_ISREG (ost->st_mode)
-      && ist->st_dev == ost->st_dev && ist->st_ino == ost->st_ino;
+  int flags = fcntl (fds[1], F_GETFL);
+  if (flags == -1)
+    {
+      perror ("fcntl(..., F_GETFL)");
+      exit (EXIT_FAILURE);
+    }
+  off_t size_to_transfer = OFF_MAX;
+  int append = (flags & O_APPEND) != 0;
+  if (S_ISREG (st[0].st_mode) && st[0].st_dev == st[1].st_dev
+      && st[0].st_ino == st[1].st_ino && append)
+    size_to_transfer = st[0].st_size;
   if (append)
-    pump_read_write (ifd, ofd, overwrite ? ist->st_size : OFF_MAX, PIPE_BUF);
-  if (S_ISREG (ist->st_mode))
-    pump_sendfile (ifd, ofd, OFF_MAX);
-  if (S_ISFIFO (ist->st_mode) || S_ISFIFO (ost->st_size))
-    pump_splice (ifd, ofd, OFF_MAX);
-  pump_read_write (ifd, ofd, OFF_MAX, PIPE_BUF);
+    pump_read_write (fds, size_to_transfer, PIPE_BUF);
+  if (S_ISREG (st[0].st_mode))
+    pump_sendfile (fds, size_to_transfer);
+  if (S_ISFIFO (st[0].st_mode) || S_ISFIFO (st[1].st_mode))
+    pump_splice (fds, size_to_transfer);
+  pump_read_write (fds, size_to_transfer, PIPE_BUF);
 }
 
 static void
-parse_redirect (int argc, char **const argv, const char * *ifile,
-		const char * *ofile, int *append)
+parse_redirect (int argc, char **argv, struct opt *opt)
 {
   for (int i = 1; i < argc; i++)
     {
@@ -292,7 +288,7 @@ parse_redirect (int argc, char **const argv, const char * *ifile,
 	    }
 	  if (*file == '>')
 	    {
-	      *append = 1;
+	      opt->append = 1;
 	      *o++ = *file;
 	      file++;
 	    }
@@ -311,22 +307,28 @@ parse_redirect (int argc, char **const argv, const char * *ifile,
 	      rargv[rargc++] = argv[i];
 	      file = argv[i];
 	    }
-	  if (in && *ifile != NULL)
+	  if (in && opt->file_input != NULL)
 	    {
 	      fprintf (stderr, "cannot set input file twice or more\n");
 	      print_usage (stderr, argc, argv);
 	      exit (EXIT_FAILURE);
 	    }
-	  if (out && *ofile != NULL)
+	  if (out && opt->file_output != NULL)
 	    {
 	      fprintf (stderr, "cannot set output file twice or more\n");
 	      print_usage (stderr, argc, argv);
 	      exit (EXIT_FAILURE);
 	    }
 	  if (in)
-	    *ifile = file;
+	    {
+	      opt->file_input = file;
+	      opt->input_open = 1;
+	    }
 	  if (out)
-	    *ofile = file;
+	    {
+	      opt->file_output = file;
+	      opt->output_open = 1;
+	    }
 	  memmove (argv + optind + rargc, argv + optind,
 		   sizeof (char *) * (i - optind));
 	  memcpy (argv + optind, rargv, sizeof (char *) * rargc);
@@ -336,94 +338,80 @@ parse_redirect (int argc, char **const argv, const char * *ifile,
     }
 }
 
-int
-main (int argc, char *argv[])
+static void
+parse_options (int argc, char *argv[], struct opt *opt)
 {
-  const char *ifile = NULL;
-  const char *ofile = NULL;
-  const char *rfile = NULL;
-  int append = 0;
-  int test = 0;
-  int punchhole = 0;
-  int overwrite = 0;
-
-  parse_redirect (argc, argv, &ifile, &ofile, &append);
   while (1)
     {
-      int c = getopt (argc, argv, "+i:o:f:r:anpVh");
+      int c = getopt (argc, argv, "+i:o:f:r:apVh");
       if (c == -1)
 	break;
       switch (c)
 	{
 	case 'i':
-	  if (ifile != NULL)
+	  if (opt->file_input != NULL)
 	    {
 	      fprintf (stderr, "cannot set input file twice or more\n");
 	      print_usage (stderr, argc, argv);
 	      exit (EXIT_FAILURE);
 	    }
-	  ifile = optarg;
+	  opt->file_input = optarg;
+	  opt->input_open = 1;
 	  break;
 	case 'o':
-	  if (ofile != NULL)
+	  if (opt->file_output != NULL)
 	    {
 	      fprintf (stderr, "cannot set output file twice or more\n");
 	      print_usage (stderr, argc, argv);
 	      exit (EXIT_FAILURE);
 	    }
-	  ofile = optarg;
+	  opt->file_output = optarg;
+	  opt->output_open = 1;
 	  break;
 	case 'f':
-	  if (ifile != NULL)
+	  if (opt->file_input != NULL)
 	    {
 	      fprintf (stderr, "cannot set input file twice or more\n");
 	      print_usage (stderr, argc, argv);
 	      exit (EXIT_FAILURE);
 	    }
-	  if (ofile != NULL)
+	  if (opt->file_output != NULL)
 	    {
 	      fprintf (stderr, "cannot set output file twice or more\n");
 	      print_usage (stderr, argc, argv);
 	      exit (EXIT_FAILURE);
 	    }
-	  ifile = optarg;
-	  ofile = optarg;
+	  opt->file_input = optarg;
+	  opt->input_open = 1;
+	  opt->file_output = optarg;
+	  opt->output_open = 1;
 	  break;
 	case 'r':
-	  if (rfile != NULL)
+	  if (opt->file_rename != NULL)
 	    {
 	      fprintf (stderr, "cannot set rename file twice or more\n");
 	      print_usage (stderr, argc, argv);
 	      exit (EXIT_FAILURE);
 	    }
-	  rfile = optarg;
+	  opt->file_rename = optarg;
 	  break;
 	case 'a':
-	  if (append)
+	  if (opt->append)
 	    {
 	      fprintf (stderr, "cannot set append mode twice or more\n");
 	      print_usage (stderr, argc, argv);
 	      exit (EXIT_FAILURE);
 	    }
-	  append = 1;
-	  break;
-	case 'n':
-	  if (test)
-	    {
-	      fprintf (stderr, "cannot set test mode twice or more\n");
-	      print_usage (stderr, argc, argv);
-	      exit (EXIT_FAILURE);
-	    }
-	  test = 1;
+	  opt->append = 1;
 	  break;
 	case 'p':
-	  if (punchhole)
+	  if (opt->punchhole)
 	    {
 	      fprintf (stderr, "cannot set punchhole mode twice or more\n");
 	      print_usage (stderr, argc, argv);
 	      exit (EXIT_FAILURE);
 	    }
-	  punchhole = 1;
+	  opt->punchhole = 1;
 	  break;
 	case 'V':
 	  print_version (stdout);
@@ -437,134 +425,170 @@ main (int argc, char *argv[])
 	  exit (EXIT_FAILURE);
 	}
     }
+}
 
-  int ifd = STDIN_FILENO;
-  int ofd = STDOUT_FILENO;
+static void
+parse_stdio (struct opt *opt)
+{
+  // IDENTIFY STDIN / STDOUT
+  struct stat st_stdin;
+  struct stat st_stdout;
 
-  if (ifile != NULL)
+  if (fstat (STDIN_FILENO, &st_stdin) == -1)
     {
-      int flags;
-      if (punchhole && !test)
-	flags = O_RDWR | O_CLOEXEC;
-      else
-	flags = O_RDONLY | O_CLOEXEC;
-      ifd = open (ifile, flags, 0666);
-      if (ifd == -1)
+      perror ("fstat");
+      exit (EXIT_FAILURE);
+    }
+  if (fstat (STDOUT_FILENO, &st_stdout) == -1)
+    {
+      perror ("fstat");
+      exit (EXIT_FAILURE);
+    }
+  if (S_ISREG (st_stdin.st_mode))
+    opt->file_input = getfilename (STDIN_FILENO);
+  if (S_ISREG (st_stdout.st_mode))
+    {
+      opt->file_output = getfilename (STDOUT_FILENO);
+      int flags = fcntl (STDOUT_FILENO, F_GETFL);
+      if (flags)
 	{
-	  perror (ifile);
+	  perror ("fcntl(STDOUT_FILENO, F_GETFL)");
 	  exit (EXIT_FAILURE);
 	}
+      opt->append = (flags & O_APPEND) != 0;
     }
-  if (ofile != NULL)
+}
+
+static void
+setopenflags (int fd, int flags)
+{
+  int curflags = fcntl (fd, F_GETFL);
+  if (curflags == -1)
     {
-      int flags;
-      if (append)
-	flags = O_WRONLY | O_CREAT | O_APPEND | O_CLOEXEC;
-      else
-	flags = O_WRONLY | O_CREAT | O_CLOEXEC;
-      ofd = open (ofile, flags, 0666);
-      if (ofd == -1)
+      perror ("fcntl(..., F_GETFL)\n");
+      exit (EXIT_FAILURE);
+    }
+  curflags |= flags;
+  if (fcntl (fd, F_SETFL, flags) == -1)
+    {
+      perror ("cannot set append mode on <stdout>\n");
+      exit (EXIT_FAILURE);
+    }
+}
+
+static void
+open_iofile (struct opt *opt, int fds[2])
+{
+  if (opt->input_open)
+    {
+      int flags = O_RDONLY | O_CLOEXEC;
+      if (opt->punchhole)
 	{
-	  perror (ofile);
+	  flags &= ~O_ACCMODE;
+	  flags |= O_RDWR;
+	}
+      fds[0] = open (opt->file_input, flags);
+      if (fds[0] == -1)
+	{
+	  perror (opt->file_input);
 	  exit (EXIT_FAILURE);
 	}
     }
   else
     {
-      int flags = fcntl (STDOUT_FILENO, F_GETFL);
-      if (flags == -1)
+      fds[0] = STDIN_FILENO;
+      if (opt->punchhole)
 	{
-	  perror ("fcntl(..., F_GETFL)\n");
+	  fprintf (stderr, "cannot set punchhole mode for outer redirect\n");
 	  exit (EXIT_FAILURE);
 	}
-      if (O_APPEND & flags)
+    }
+  if (opt->output_open)
+    {
+      int flags = O_WRONLY | O_CREAT | O_CLOEXEC;
+      if (opt->append)
+	flags |= O_APPEND;
+      fds[1] = open (opt->file_output, flags, 0666);
+      if (fds[1] == -1)
 	{
-	  if (append)
-	    {
-	      fprintf (stderr, "cannot set append mode twice or more\n");
-	      exit (EXIT_FAILURE);
-	    }
-	  append = 1;
+	  perror (opt->file_output);
+	  exit (EXIT_FAILURE);
 	}
-      else if (append)
-	{
-	  flags |= O_APPEND;
-	  if (fcntl (STDOUT_FILENO, F_SETFL, flags) == -1)
-	    {
-	      perror ("cannot set append mode on <stdout>\n");
-	      exit (EXIT_FAILURE);
-	    }
-	}
+    }
+  else
+    {
+      fds[1] = STDOUT_FILENO;
+      if (opt->append)
+	setopenflags (fds[1], O_APPEND);
+    }
+}
+
+int
+main (int argc, char *argv[])
+{
+  struct opt opt = { };
+
+  parse_stdio (&opt);
+  parse_redirect (argc, argv, &opt);
+  parse_options (argc, argv, &opt);
+
+  int fds[2];
+  open_iofile (&opt, fds);
+
+  struct stat st[2];
+  if (fstat (fds[0], st + 0) == -1)
+    {
+      perror ("fstat");
+      exit (EXIT_FAILURE);
+    }
+  if (fstat (fds[1], st + 1) == -1)
+    {
+      perror ("fstat");
+      exit (EXIT_FAILURE);
     }
 
-  struct stat ist;
-  struct stat ost;
-  off_t opos = 0;
-  if (fstat (ifd, &ist) == -1)
-    {
-      perror ("fstat");
-      exit (EXIT_FAILURE);
-    }
-  if (fstat (ofd, &ost) == -1)
-    {
-      perror ("fstat");
-      exit (EXIT_FAILURE);
-    }
-  if (ist.st_dev == ost.st_dev && ist.st_ino == ost.st_ino
-      && S_ISREG (ost.st_mode))
-    overwrite = 1;
-  if (ifile == NULL && S_ISREG (ist.st_mode))
-    ifile = getfilename (ifd);
-  if (ofile == NULL && S_ISREG (ost.st_mode))
-    ofile = getfilename (ofd);
-  if (rfile != NULL && !S_ISREG (ost.st_mode))
+  int overwrite = st[0].st_dev == st[1].st_dev && st[0].st_ino == st[1].st_ino
+    && S_ISREG (st[0].st_mode) && S_ISREG (st[1].st_mode);
+  if (opt.file_rename != NULL && !S_ISREG (st[1].st_mode))
     {
       fprintf (stderr, "cannot rename from non regular file\n");
       print_usage (stderr, argc, argv);
       exit (EXIT_FAILURE);
     }
-  if (append && !S_ISREG (ost.st_mode))
+  if (opt.append && !S_ISREG (st[1].st_mode))
     {
       fprintf (stderr, "cannot append to non regular file\n");
       print_usage (stderr, argc, argv);
       exit (EXIT_FAILURE);
     }
-  if (test)
+  if (argc <= optind && !opt.punchhole && opt.file_rename == NULL)
     {
-      close (ofd);
-      ofd = open ("/dev/null", O_WRONLY);
-      if (ofd == -1)
+      if (!opt.append && S_ISREG (st[1].st_mode))
 	{
-	  perror ("/dev/null");
-	  exit (EXIT_FAILURE);
+	  if (ftruncate (fds[1], 0) == -1)
+	    {
+	      perror ("ftruncate");
+	      exit (EXIT_FAILURE);
+	    }
 	}
+      pump (fds);
     }
-  if (argc <= optind && !punchhole && !test && rfile == NULL)
-    pump (ifd, &ist, ofd, &ost, append, overwrite);
-  if (!overwrite && !punchhole && !test && rfile == NULL)
+  if (!overwrite && !opt.punchhole && opt.file_rename == NULL)
     {
-      if (ifd != STDIN_FILENO)
-	{
-	  dup2 (ifd, STDIN_FILENO);
-	  close (ifd);
-	}
-      if (ofd != STDOUT_FILENO)
-	{
-	  dup2 (ofd, STDOUT_FILENO);
-	  close (ofd);
-	}
+      dup2 (fds[0], STDIN_FILENO);
+      dup2 (fds[1], STDOUT_FILENO);
       execvp (argv[optind], argv + optind);
       perror (argv[optind]);
       exit (EXIT_FAILURE);
     }
   int ipfds[2];
   int opfds[2];
-  if (pipe (ipfds) == -1)
+  if (pipe2 (ipfds, O_CLOEXEC) == -1)
     {
       perror ("pipe");
       exit (EXIT_FAILURE);
     }
-  if (pipe (opfds) == -1)
+  if (pipe2 (opfds, O_CLOEXEC) == -1)
     {
       perror ("pipe");
       exit (EXIT_FAILURE);
@@ -580,28 +604,24 @@ main (int argc, char *argv[])
       close (ipfds[1]);
       close (opfds[0]);
       if (argc <= optind)
-	pump (ipfds[0], NULL, opfds[1], NULL, append, overwrite);
-      if (ipfds[0] != STDIN_FILENO)
 	{
-	  dup2 (ipfds[0], STDIN_FILENO);
-	  close (ipfds[0]);
+	  int pfds[2] = { ipfds[0], opfds[1] };
+	  pump (pfds);
 	}
-      if (opfds[1] != STDOUT_FILENO)
-	{
-	  dup2 (opfds[1], STDOUT_FILENO);
-	  close (opfds[1]);
-	}
+      dup2 (ipfds[0], STDIN_FILENO);
+      dup2 (opfds[1], STDOUT_FILENO);
       execvp (argv[optind], argv + optind);
       perror (argv[optind]);
       exit (EXIT_FAILURE);
     }
   close (ipfds[0]);
   close (opfds[1]);
-  char ibuf[ist.st_blksize];
-  char obuf[ost.st_blksize];
+  char ibuf[st[0].st_blksize];
+  char obuf[st[1].st_blksize];
   size_t isize = 0;
   size_t osize = 0;
   off_t ipos = 0;
+  off_t opos = opt.append ? st[1].st_size : 0;
   int ieof = 0;
   int oeof = 0;
   int iclosed = 0;
@@ -619,11 +639,11 @@ main (int argc, char *argv[])
 	}
       if (oeof && osize == 0)
 	break;
-      if (!ieof && isize < ist.st_blksize)
+      if (!ieof && isize < st[0].st_blksize)
 	{
-	  FD_SET (ifd, &rfds);
-	  if (maxfd < ifd)
-	    maxfd = ifd;
+	  FD_SET (fds[0], &rfds);
+	  if (maxfd < fds[0])
+	    maxfd = fds[0];
 	}
       if (isize > 0)
 	{
@@ -631,17 +651,17 @@ main (int argc, char *argv[])
 	  if (maxfd < ipfds[1])
 	    maxfd = ipfds[1];
 	}
-      if (!oeof && osize < ost.st_blksize)
+      if (!oeof && osize < st[1].st_blksize)
 	{
 	  FD_SET (opfds[0], &rfds);
 	  if (maxfd < opfds[0])
 	    maxfd = opfds[0];
 	}
-      if (osize > 0 && (!overwrite || append || ieof || ipos > opos))
+      if (osize > 0 && (!overwrite || opt.append || ieof || ipos > opos))
 	{
-	  FD_SET (ofd, &wfds);
-	  if (maxfd < ofd)
-	    maxfd = ofd;
+	  FD_SET (fds[1], &wfds);
+	  if (maxfd < fds[1])
+	    maxfd = fds[1];
 	}
       if (maxfd == -1)
 	{
@@ -650,14 +670,16 @@ main (int argc, char *argv[])
 	  fprintf (stderr, "buffer exceeded\n");
 	  fprintf (stderr,
 		   "%s(%ju/%ju) -> %s (buffer = %zu/pipe buffer = %u)\n",
-		   ifile == NULL ? "<stdin>" : getrelative (ifile),
-		   (uintmax_t) ipos, (uintmax_t) ist.st_size,
+		   opt.file_input ==
+		   NULL ? "<stdin>" : getrelative (opt.file_input),
+		   (uintmax_t) ipos, (uintmax_t) st[0].st_size,
 		   argv[optind] == NULL ? argv[0] : argv[optind], isize,
 		   PIPE_BUF);
 	  fprintf (stderr,
 		   "%s(%ju/%ju) <- %s (buffer = %zu/pipe buffer = %u)\n",
-		   ofile == NULL ? "<stdout>" : getrelative (ofile),
-		   (uintmax_t) opos, (uintmax_t) ist.st_size,
+		   opt.file_output ==
+		   NULL ? "<stdout>" : getrelative (opt.file_output),
+		   (uintmax_t) opos, (uintmax_t) st[1].st_size,
 		   argv[optind] == NULL ? argv[0] : argv[optind], osize,
 		   PIPE_BUF);
 	  exit (EXIT_FAILURE);
@@ -682,7 +704,8 @@ main (int argc, char *argv[])
 	}
       if (FD_ISSET (opfds[0], &rfds))
 	{
-	  ssize_t sz = read (opfds[0], obuf + osize, ost.st_blksize - osize);
+	  ssize_t sz =
+	    read (opfds[0], obuf + osize, st[1].st_blksize - osize);
 	  if (sz == -1)
 	    {
 	      perror ("read");
@@ -694,12 +717,12 @@ main (int argc, char *argv[])
 	    osize += sz;
 	  continue;
 	}
-      if (FD_ISSET (ifd, &rfds))
+      if (FD_ISSET (fds[0], &rfds))
 	{
-	  size_t rsize = ist.st_blksize - isize;
-	  if (overwrite && append && ist.st_size - ipos < rsize)
-	    rsize = ist.st_size - ipos;
-	  ssize_t sz = rsize == 0 ? 0 : read (ifd, ibuf + isize, rsize);
+	  size_t rsize = st[0].st_blksize - isize;
+	  if (overwrite && opt.append && st[0].st_size - ipos < rsize)
+	    rsize = st[0].st_size - ipos;
+	  ssize_t sz = rsize == 0 ? 0 : read (fds[0], ibuf + isize, rsize);
 	  if (sz == -1)
 	    {
 	      perror ("pread");
@@ -709,11 +732,11 @@ main (int argc, char *argv[])
 	    ieof = 1;
 	  else
 	    {
-	      if (punchhole && !test)
+	      if (opt.punchhole)
 		{
 		  if (fallocate
-		      (ifd, FALLOC_FL_PUNCH_HOLE | FALLOC_FL_KEEP_SIZE, ipos,
-		       sz) == -1)
+		      (fds[0], FALLOC_FL_PUNCH_HOLE | FALLOC_FL_KEEP_SIZE,
+		       ipos, sz) == -1)
 		    {
 		      perror ("fallocate");
 		      exit (EXIT_FAILURE);
@@ -724,24 +747,24 @@ main (int argc, char *argv[])
 	    }
 	  continue;
 	}
-      if (FD_ISSET (ofd, &wfds))
+      if (FD_ISSET (fds[1], &wfds))
 	{
 	  size_t wsize = osize;
-	  if (!ieof && overwrite && !append && wsize > ipos - opos)
+	  if (!ieof && overwrite && !opt.append && wsize > ipos - opos)
 	    wsize = ipos - opos;
-	  ssize_t sz = write (ofd, obuf, wsize);
+	  ssize_t sz = write (fds[1], obuf, wsize);
 	  if (sz == -1)
 	    {
 	      perror ("pwrite");
 	      exit (EXIT_FAILURE);
 	    }
-	  memmove (obuf, obuf + sz, ost.st_blksize - sz);
+	  memmove (obuf, obuf + sz, st[1].st_blksize - sz);
 	  opos += sz;
 	  osize -= sz;
 	  continue;
 	}
     }
-  close (ifd);
+  close (fds[0]);
   close (opfds[0]);
   int ret_status = EXIT_FAILURE;
   while (1)
@@ -761,29 +784,18 @@ main (int argc, char *argv[])
 	    ret_status = WEXITSTATUS (status);
 	  if (opos > 0 || ret_status == EXIT_SUCCESS)
 	    {
-	      if (test)
+	      if (overwrite && ftruncate (fds[1], opos) == -1)
 		{
-		  fprintf (stderr, "%s(%ju bytes) -> %s -> %s(%ju bytes)\n",
-			   ifile == NULL ? "<stdin>" : getrelative (ifile),
-			   (uintmax_t) ipos,
-			   argv[optind] == NULL ? argv[0] : argv[optind],
-			   ofile == NULL ? "<stdout>" : getrelative (ofile),
-			   (uintmax_t) opos);
-		}
-	      else if (overwrite && ftruncate (ofd, opos) == -1)
-		{
-		  perror (ofile);
+		  perror (opt.file_output);
 		  exit (EXIT_FAILURE);
 		}
-	      close (ofd);
-	      if (rfile != NULL)
+	      close (fds[1]);
+	      if (opt.file_rename != NULL)
 		{
-		  if (test)
-		    fprintf (stderr, "rename %s -> %s\n", getrelative (ofile),
-			     rfile);
-		  else if (ofile != NULL && rename (ofile, rfile) == -1)
+		  if (opt.file_output != NULL
+		      && rename (opt.file_output, opt.file_rename) == -1)
 		    {
-		      perror (rfile);
+		      perror (opt.file_rename);
 		      exit (EXIT_FAILURE);
 		    }
 		}
