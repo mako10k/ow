@@ -119,10 +119,11 @@ getrelative (const char *path)
   return path;
 }
 
-static void pump (int, int, off_t, size_t) __attribute__((noreturn));
+static void pump_read_write (int, int, off_t, size_t)
+  __attribute__((noreturn));
 
 static void
-pump (int ifd, int ofd, off_t size, size_t size_buf)
+pump_read_write (int ifd, int ofd, off_t size, size_t size_buf)
 {
   char buf[size_buf];
   off_t size_transfered = 0;
@@ -151,10 +152,10 @@ pump (int ifd, int ofd, off_t size, size_t size_buf)
   exit (EXIT_SUCCESS);
 }
 
-static void pump_splice (int, int, off_t, off_t) __attribute__((noreturn));
+static void pump_splice (int, int, off_t) __attribute__((noreturn));
 
 static void
-pump_splice (int ifd, int ofd, off_t size, off_t ooff)
+pump_splice (int ifd, int ofd, off_t size)
 {
   off_t size_transfered = 0;
   while (size_transfered < size)
@@ -163,8 +164,7 @@ pump_splice (int ifd, int ofd, off_t size, off_t ooff)
 	size - size_transfered > SIZE_MAX ? SIZE_MAX : size - size_transfered;
       if (size_to_splice == 0)
 	exit (EXIT_SUCCESS);
-      ssize_t size_spliced =
-	splice (ifd, NULL, ofd, &ooff, size_to_splice, 0);
+      ssize_t size_spliced = splice (ifd, NULL, ofd, NULL, size_to_splice, 0);
       if (size_spliced == -1)
 	{
 	  perror ("splice");
@@ -177,16 +177,11 @@ pump_splice (int ifd, int ofd, off_t size, off_t ooff)
   exit (EXIT_SUCCESS);
 }
 
-static void pump_sendfile (int, int, off_t, off_t) __attribute__((noreturn));
+static void pump_sendfile (int, int, off_t) __attribute__((noreturn));
 
 static void
-pump_sendfile (int ifd, int ofd, off_t size, off_t ooff)
+pump_sendfile (int ifd, int ofd, off_t size)
 {
-  if (lseek (ofd, ooff, SEEK_SET) == (off_t) - 1)
-    {
-      perror ("lseek");
-      exit (EXIT_FAILURE);
-    }
   off_t size_transfered = 0;
   while (size_transfered < size)
     {
@@ -205,6 +200,22 @@ pump_sendfile (int ifd, int ofd, off_t size, off_t ooff)
       size_transfered += size_sent;
     }
   exit (EXIT_SUCCESS);
+}
+
+static void pump (int, struct stat *, int, struct stat *, int, int)
+  __attribute__((noreturn));
+
+static void
+pump (int ifd, struct stat *ist, int ofd, struct stat *ost, int append,
+      int overwrite)
+{
+  if (append)
+    pump_read_write (ifd, ofd, overwrite ? ist->st_size : OFF_MAX, PIPE_BUF);
+  if (S_ISREG (ist->st_mode))
+    pump_sendfile (ifd, ofd, OFF_MAX);
+  if (S_ISFIFO (ist->st_mode) || S_ISFIFO (ost->st_size))
+    pump_splice (ifd, ofd, OFF_MAX);
+  pump_read_write (ifd, ofd, OFF_MAX, PIPE_BUF);
 }
 
 static void
@@ -473,29 +484,8 @@ main (int argc, char *argv[])
 	  exit (EXIT_FAILURE);
 	}
     }
-  if (argc <= optind && (S_ISFIFO (ist.st_mode) || S_ISFIFO (ost.st_mode)))
-    {
-      off_t size = OFF_MAX;
-      off_t ooff = 0;
-      if (S_ISREG (ist.st_mode) && append)
-	{
-	  size = ist.st_size;
-	  ooff = ost.st_size;
-	}
-      pump_splice (ifd, ofd, size, ooff);
-    }
-  if (argc <= optind && S_ISREG (ist.st_mode))
-    {
-      off_t size = OFF_MAX;
-      off_t ooff = 0;
-      if (S_ISREG (ist.st_mode) && append)
-	{
-	  size = ist.st_size;
-	  ooff = ost.st_size;
-	  pump (ifd, ofd, size, PIPE_BUF);
-	}
-      pump_sendfile (ifd, ofd, size, ooff);
-    }
+  if (argc <= optind)
+    pump (ifd, &ist, ofd, &ost, append, overwrite);
   int ipfds[2];
   int opfds[2];
   if (pipe (ipfds) == -1)
