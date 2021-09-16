@@ -24,9 +24,19 @@ struct opt
   const char *file_rename;
   int append:1;
   int punchhole:1;
-  int input_open:1;
-  int output_open:1;
+  int file_stdin:1;
+  int file_stdout:1;
 };
+
+#define OPT_INITIALIZER {\
+  .file_input = NULL,\
+  .file_output = NULL,\
+  .file_rename = NULL,\
+  .append = 0,\
+  .punchhole = 0,\
+  .file_stdin = 0,\
+  .file_stdout = 0,\
+}
 
 static void
 print_version (FILE * fp)
@@ -320,15 +330,9 @@ parse_redirect (int argc, char **argv, struct opt *opt)
 	      exit (EXIT_FAILURE);
 	    }
 	  if (in)
-	    {
-	      opt->file_input = file;
-	      opt->input_open = 1;
-	    }
+	    opt->file_input = file;
 	  if (out)
-	    {
-	      opt->file_output = file;
-	      opt->output_open = 1;
-	    }
+	    opt->file_output = file;
 	  memmove (argv + optind + rargc, argv + optind,
 		   sizeof (char *) * (i - optind));
 	  memcpy (argv + optind, rargv, sizeof (char *) * rargc);
@@ -356,7 +360,6 @@ parse_options (int argc, char *argv[], struct opt *opt)
 	      exit (EXIT_FAILURE);
 	    }
 	  opt->file_input = optarg;
-	  opt->input_open = 1;
 	  break;
 	case 'o':
 	  if (opt->file_output != NULL)
@@ -366,7 +369,6 @@ parse_options (int argc, char *argv[], struct opt *opt)
 	      exit (EXIT_FAILURE);
 	    }
 	  opt->file_output = optarg;
-	  opt->output_open = 1;
 	  break;
 	case 'f':
 	  if (opt->file_input != NULL)
@@ -382,9 +384,7 @@ parse_options (int argc, char *argv[], struct opt *opt)
 	      exit (EXIT_FAILURE);
 	    }
 	  opt->file_input = optarg;
-	  opt->input_open = 1;
 	  opt->file_output = optarg;
-	  opt->output_open = 1;
 	  break;
 	case 'r':
 	  if (opt->file_rename != NULL)
@@ -428,7 +428,7 @@ parse_options (int argc, char *argv[], struct opt *opt)
 }
 
 static void
-parse_stdio (struct opt *opt)
+check_stdio (struct opt *opt)
 {
   // IDENTIFY STDIN / STDOUT
   struct stat st_stdin;
@@ -445,10 +445,14 @@ parse_stdio (struct opt *opt)
       exit (EXIT_FAILURE);
     }
   if (S_ISREG (st_stdin.st_mode))
-    opt->file_input = getfilename (STDIN_FILENO);
+    {
+      opt->file_input = getfilename (STDIN_FILENO);
+      opt->file_stdin = 1;
+    }
   if (S_ISREG (st_stdout.st_mode))
     {
       opt->file_output = getfilename (STDOUT_FILENO);
+      opt->file_stdin = 1;
       int flags = fcntl (STDOUT_FILENO, F_GETFL);
       if (flags)
 	{
@@ -479,7 +483,7 @@ setopenflags (int fd, int flags)
 static void
 open_iofile (struct opt *opt, int fds[2])
 {
-  if (opt->input_open)
+  if (opt->file_input && !opt->file_stdin)
     {
       int flags = O_RDONLY | O_CLOEXEC;
       if (opt->punchhole)
@@ -503,7 +507,7 @@ open_iofile (struct opt *opt, int fds[2])
 	  exit (EXIT_FAILURE);
 	}
     }
-  if (opt->output_open)
+  if (opt->file_output && !opt->file_stdout)
     {
       int flags = O_WRONLY | O_CREAT | O_CLOEXEC;
       if (opt->append)
@@ -526,9 +530,9 @@ open_iofile (struct opt *opt, int fds[2])
 int
 main (int argc, char *argv[])
 {
-  struct opt opt = { };
+  struct opt opt = OPT_INITIALIZER;
 
-  parse_stdio (&opt);
+  check_stdio (&opt);
   parse_redirect (argc, argv, &opt);
   parse_options (argc, argv, &opt);
 
