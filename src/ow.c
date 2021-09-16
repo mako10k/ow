@@ -115,6 +115,36 @@ getrelative (const char *path)
   return path;
 }
 
+static void pump (void) __attribute__((noreturn));
+
+static void
+pump (void)
+{
+  char buf[PIPE_BUF];
+  while (1)
+    {
+      ssize_t rsize = read (STDIN_FILENO, buf, PIPE_BUF);
+      if (rsize == -1)
+	{
+	  perror ("read");
+	  exit (EXIT_FAILURE);
+	}
+      if (rsize == 0)
+	exit (EXIT_SUCCESS);
+      ssize_t wsize = write (STDOUT_FILENO, buf, rsize);
+      if (wsize == -1)
+	{
+	  perror ("write");
+	  exit (EXIT_FAILURE);
+	}
+      if (wsize < rsize)
+	{
+	  fprintf (stderr, "short read from pipe\n");
+	  exit (EXIT_FAILURE);
+	}
+    }
+}
+
 int
 main (int argc, char *argv[])
 {
@@ -407,31 +437,7 @@ main (int argc, char *argv[])
 	  close (opfds[1]);
 	}
       if (argc <= optind)
-	{
-	  char buf[PIPE_BUF];
-	  while (1)
-	    {
-	      ssize_t rsize = read (STDIN_FILENO, buf, PIPE_BUF);
-	      if (rsize == -1)
-		{
-		  perror ("read");
-		  exit (EXIT_FAILURE);
-		}
-	      if (rsize == 0)
-		exit (EXIT_SUCCESS);
-	      ssize_t wsize = write (STDOUT_FILENO, buf, rsize);
-	      if (wsize == -1)
-		{
-		  perror ("write");
-		  exit (EXIT_FAILURE);
-		}
-	      if (wsize < rsize)
-		{
-		  fprintf (stderr, "short read from pipe\n");
-		  exit (EXIT_FAILURE);
-		}
-	    }
-	}
+	pump ();
       execvp (argv[optind], argv + optind);
       perror (argv[optind]);
       exit (EXIT_FAILURE);
