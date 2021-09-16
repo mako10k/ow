@@ -512,9 +512,9 @@ main (int argc, char *argv[])
 	  exit (EXIT_FAILURE);
 	}
     }
-  if (argc <= optind && !punchhole && !test)
+  if (argc <= optind && !punchhole && !test && rfile == NULL)
     pump (ifd, &ist, ofd, &ost, append, overwrite);
-  if (!overwrite)
+  if (!overwrite && !punchhole && !test && rfile == NULL)
     {
       if (ifd != STDIN_FILENO)
 	{
