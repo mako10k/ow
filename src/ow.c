@@ -469,6 +469,33 @@ main (int argc, char *argv[])
 	  exit (EXIT_FAILURE);
 	}
     }
+  else
+    {
+      int flags = fcntl (STDOUT_FILENO, F_GETFL);
+      if (flags == -1)
+	{
+	  perror ("fcntl(..., F_GETFL)\n");
+	  exit (EXIT_FAILURE);
+	}
+      if (O_APPEND & flags)
+	{
+	  if (append)
+	    {
+	      fprintf (stderr, "cannot set append mode twice or more\n");
+	      exit (EXIT_FAILURE);
+	    }
+	  append = 1;
+	}
+      else if (append)
+	{
+	  flags |= O_APPEND;
+	  if (fcntl (STDOUT_FILENO, F_SETFL, flags) == -1)
+	    {
+	      perror ("cannot set append mode on <stdout>\n");
+	      exit (EXIT_FAILURE);
+	    }
+	}
+    }
 
   struct stat ist;
   struct stat ost;
