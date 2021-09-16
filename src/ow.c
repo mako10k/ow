@@ -209,6 +209,38 @@ static void
 pump (int ifd, struct stat *ist, int ofd, struct stat *ost, int append,
       int overwrite)
 {
+  struct stat stbufs[2];
+  int recheck_overwrite = 0;
+  if (ist == NULL)
+    {
+      if (fstat (ifd, stbufs) == -1)
+	{
+	  perror ("fstat");
+	  exit (EXIT_FAILURE);
+	}
+      ist = stbufs;
+      recheck_overwrite = 1;
+    }
+  if (ost == NULL)
+    {
+      if (fstat (ofd, stbufs + 1) == -1)
+	{
+	  perror ("fstat");
+	  exit (EXIT_FAILURE);
+	}
+      ost = stbufs + 1;
+      recheck_overwrite = 1;
+      int flags = fcntl (ofd, F_GETFL);
+      if (flags == -1)
+	{
+	  perror ("fcntl(..., F_GETFL)");
+	  exit (EXIT_FAILURE);
+	}
+      append = (flags & O_APPEND) != 0;
+    }
+  if (recheck_overwrite)
+    overwrite = S_ISREG (ist->st_mode) && S_ISREG (ost->st_mode)
+      && ist->st_dev == ost->st_dev && ist->st_ino == ost->st_ino;
   if (append)
     pump_read_write (ifd, ofd, overwrite ? ist->st_size : OFF_MAX, PIPE_BUF);
   if (S_ISREG (ist->st_mode))
@@ -453,11 +485,7 @@ main (int argc, char *argv[])
     }
   if (ist.st_dev == ost.st_dev && ist.st_ino == ost.st_ino
       && S_ISREG (ost.st_mode))
-    {
-      overwrite = 1;
-      if (append)
-	opos = ost.st_size;
-    }
+    overwrite = 1;
   if (ifile == NULL && S_ISREG (ist.st_mode))
     ifile = getfilename (ifd);
   if (ofile == NULL && S_ISREG (ost.st_mode))
@@ -484,8 +512,24 @@ main (int argc, char *argv[])
 	  exit (EXIT_FAILURE);
 	}
     }
-  if (argc <= optind)
+  if (argc <= optind && !punchhole && !test)
     pump (ifd, &ist, ofd, &ost, append, overwrite);
+  if (!overwrite)
+    {
+      if (ifd != STDIN_FILENO)
+	{
+	  dup2 (ifd, STDIN_FILENO);
+	  close (ifd);
+	}
+      if (ofd != STDOUT_FILENO)
+	{
+	  dup2 (ofd, STDOUT_FILENO);
+	  close (ofd);
+	}
+      execvp (argv[optind], argv + optind);
+      perror (argv[optind]);
+      exit (EXIT_FAILURE);
+    }
   int ipfds[2];
   int opfds[2];
   if (pipe (ipfds) == -1)
@@ -508,6 +552,8 @@ main (int argc, char *argv[])
     {
       close (ipfds[1]);
       close (opfds[0]);
+      if (argc <= optind)
+	pump (ipfds[0], NULL, opfds[1], NULL, append, overwrite);
       if (ipfds[0] != STDIN_FILENO)
 	{
 	  dup2 (ipfds[0], STDIN_FILENO);
