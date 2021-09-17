@@ -12,6 +12,8 @@
 #include <errno.h>
 #include <ctype.h>
 #include <sys/sendfile.h>
+#include <libgen.h>
+#include <locale.h>
 
 #include "config.h"
 
@@ -454,7 +456,7 @@ check_stdio (struct opt *opt)
       opt->file_output = getfilename (STDOUT_FILENO);
       opt->file_stdin = 1;
       int flags = fcntl (STDOUT_FILENO, F_GETFL);
-      if (flags)
+      if (flags == -1)
 	{
 	  perror ("fcntl(STDOUT_FILENO, F_GETFL)");
 	  exit (EXIT_FAILURE);
@@ -530,6 +532,7 @@ open_iofile (struct opt *opt, int fds[2])
 int
 main (int argc, char *argv[])
 {
+  setlocale (LC_ALL, "");
   struct opt opt = OPT_INITIALIZER;
 
   check_stdio (&opt);
@@ -539,7 +542,7 @@ main (int argc, char *argv[])
   int fds[2];
   open_iofile (&opt, fds);
 
-  struct stat st[2];
+  struct stat st[3];
   if (fstat (fds[0], st + 0) == -1)
     {
       perror ("fstat");
@@ -550,15 +553,70 @@ main (int argc, char *argv[])
       perror ("fstat");
       exit (EXIT_FAILURE);
     }
+  if (opt.file_rename != NULL)
+    {
+      if (!S_ISREG (st[1].st_mode))
+	{
+	  fprintf (stderr, "cannot rename non regular output\n");
+	  exit (EXIT_FAILURE);
+	}
+      if (lstat (opt.file_rename, st + 2) == -1)
+	{
+	  if (errno != ENOENT)
+	    {
+	      perror ("lstat");
+	      exit (EXIT_FAILURE);
+	    }
+	  char *file = strdup (opt.file_rename);
+	  if (file == NULL)
+	    {
+	      perror ("strdup");
+	      exit (EXIT_FAILURE);
+	    }
+	  char *dir = dirname (file);
+	  if (stat (dir, st + 2) == -1)
+	    {
+	      perror (dir);
+	      exit (EXIT_FAILURE);
+	    }
+	  if (!S_ISDIR (st[2].st_mode))
+	    {
+	      errno = ENOTDIR;
+	      perror (dir);
+	      exit (EXIT_FAILURE);
+	    }
+	  free (dir);
+	  if (st[1].st_dev != st[2].st_dev)
+	    {
+	      errno = EXDEV;
+	      perror (opt.file_rename);
+	      exit (EXIT_FAILURE);
+	    }
+	}
+      else
+	{
+	  if (S_ISDIR (st[2].st_mode))
+	    {
+	      errno = EISDIR;
+	      perror (opt.file_rename);
+	      exit (EXIT_FAILURE);
+	    }
+	  if (st[1].st_dev != st[2].st_dev)
+	    {
+	      errno = EXDEV;
+	      perror (opt.file_rename);
+	      exit (EXIT_FAILURE);
+	    }
+	  else if (st[1].st_ino == st[2].st_ino)
+	    {
+	      fprintf (stderr, "cannot rename to same file\n");
+	      exit (EXIT_FAILURE);
+	    }
+	}
+    }
 
   int overwrite = st[0].st_dev == st[1].st_dev && st[0].st_ino == st[1].st_ino
     && S_ISREG (st[0].st_mode) && S_ISREG (st[1].st_mode);
-  if (opt.file_rename != NULL && !S_ISREG (st[1].st_mode))
-    {
-      fprintf (stderr, "cannot rename from non regular file\n");
-      print_usage (stderr, argc, argv);
-      exit (EXIT_FAILURE);
-    }
   if (opt.append && !S_ISREG (st[1].st_mode))
     {
       fprintf (stderr, "cannot append to non regular file\n");
