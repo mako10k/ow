@@ -6,6 +6,10 @@ AC_INIT([ow], [0.1.0], [katsumata-m@t-axis.co.jp])
 AM_INIT_AUTOMAKE([foreign])
 AC_CONFIG_SRCDIR([src/ow.c])
 AC_CONFIG_HEADERS([config.h])
+AM_GNU_GETTEXT([external])
+AM_GNU_GETTEXT_VERSION([0.19.8])
+LT_INIT([])
+AC_CONFIG_MACRO_DIRS([m4])
 
 # Checks for programs.
 AC_PROG_CC
@@ -28,6 +32,6 @@ AC_FUNC_LSTAT_FOLLOWS_SLASHED_SYMLINK
 AC_FUNC_MALLOC
 AC_CHECK_FUNCS([dup2 memmove select ftruncate getcwd])
 
-AC_CONFIG_FILES([Makefile src/Makefile])
+AC_CONFIG_FILES([Makefile src/Makefile po/Makefile.in])
 
 AC_OUTPUT

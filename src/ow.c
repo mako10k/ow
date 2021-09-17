@@ -14,8 +14,12 @@
 #include <sys/sendfile.h>
 #include <libgen.h>
 #include <locale.h>
+#include "gettext.h"
 
 #include "config.h"
+
+#define _(String) gettext(String)
+#define N_(String) gettext_noop(String)
 
 #define OFF_MAX (~((off_t)1<<(sizeof(off_t)*8-1)))
 
@@ -43,54 +47,61 @@ struct opt
 static void
 print_version (FILE * fp)
 {
-  fprintf (fp, "%s\n", PACKAGE_STRING);
+  fprintf (fp, _("%s\n"), PACKAGE_STRING);
 }
 
 static void
 print_usage (FILE * fp, int argc, char *const argv[])
 {
-  fprintf (fp, "Usage:\n");
-  fprintf (fp, "  %s [options] [--] cmd [arg ...] [redirects]\n", argv[0]);
-  fprintf (fp, "\n");
-  fprintf (fp, "Options:\n");
-  fprintf (fp, "  -i infile     : input file\n");
-  fprintf (fp, "  -o outfile    : output file\n");
-  fprintf (fp, "  -f inoutfile  : input/output file\n");
-  fprintf (fp, "  -r renamefile : rename output file\n");
-  fprintf (fp, "  -a            : append mode\n");
+  fprintf (fp, _("Usage:\n"));
+  fprintf (fp, _("  %s [options] [--] cmd [arg ...] [redirects]\n"), argv[0]);
+  fprintf (fp, _("\n"));
+  fprintf (fp, _("Options:\n"));
+  fprintf (fp, _("  -i infile     : input file\n"));
+  fprintf (fp, _("  -o outfile    : output file\n"));
+  fprintf (fp, _("  -f inoutfile  : input/output file\n"));
+  fprintf (fp, _("  -r renamefile : rename output file\n"));
+  fprintf (fp, _("  -a            : append mode\n"));
   fprintf (fp,
-	   "  -p            : punchhole mode (punchhole read data on input file)\n");
-  fprintf (fp, "  -V            : show version\n");
-  fprintf (fp, "  -h            : show usage\n");
-  fprintf (fp, "\n");
-  fprintf (fp, "Redirects:\n");
-  fprintf (fp, "  < infile      : input file\n");
-  fprintf (fp, "  > outfile     : output file\n");
-  fprintf (fp, "  >> outfile    : output file (append mode)\n");
-  fprintf (fp, "  <> inoutfile  : input/output file\n");
-  fprintf (fp, "  <>> inoutfile : input/output file (append mode)\n");
-  fprintf (fp, "\n");
-  fprintf (fp, "  NOTE: You can use same file for input and output.\n");
+	   _
+	   ("  -p            : punchhole mode (punchhole read data on input file)\n"));
+  fprintf (fp, _("  -V            : show version\n"));
+  fprintf (fp, _("  -h            : show usage\n"));
+  fprintf (fp, _("\n"));
+  fprintf (fp, _("Redirects:\n"));
+  fprintf (fp, _("  < infile      : input file\n"));
+  fprintf (fp, _("  > outfile     : output file\n"));
+  fprintf (fp, _("  >> outfile    : output file (append mode)\n"));
+  fprintf (fp, _("  <> inoutfile  : input/output file\n"));
+  fprintf (fp, _("  <>> inoutfile : input/output file (append mode)\n"));
+  fprintf (fp, _("\n"));
+  fprintf (fp, _("  NOTE: You can use same file for input and output.\n"));
   fprintf (fp,
-	   "        It writes to output file only read position to safe read.\n");
+	   _
+	   ("        It writes to output file only read position to safe read.\n"));
   fprintf (fp,
-	   "        But you shouldn't output widely incresed size data against input\n");
-  fprintf (fp, "        when you use same file for input and output.\n");
+	   _
+	   ("        But you shouldn't output widely incresed size data against input\n"));
+  fprintf (fp, _("        when you use same file for input and output.\n"));
   fprintf (fp,
-	   "        It would be stopped program because the all buffer consumed\n");
+	   _
+	   ("        It would be stopped program because the all buffer consumed\n"));
   fprintf (fp,
-	   "        to wait forever writing for read position on the file.\n");
-  fprintf (fp, "\n");
-  fprintf (fp, "  NOTE: < and > must escape or quote on shell.\n");
-  fprintf (fp, "    example:\n");
+	   _
+	   ("        to wait forever writing for read position on the file.\n"));
+  fprintf (fp, _("\n"));
+  fprintf (fp, _("  NOTE: < and > must escape or quote on shell.\n"));
+  fprintf (fp, _("    example:\n"));
   fprintf (fp,
-	   "      %s -p -r hugefile.txt.gz gzip -c '<hugefile.txt' \\> hugefile.txt\n",
+	   _
+	   ("      %s -p -r hugefile.txt.gz gzip -c '<hugefile.txt' \\> hugefile.txt\n"),
 	   argv[0]);
-  fprintf (fp, "\n");
+  fprintf (fp, _("\n"));
   fprintf (fp,
-	   "  NOTE: Using same file for input and output or punchhole option\n");
-  fprintf (fp, "        may destructive.\n");
-  fprintf (fp, "\n");
+	   _
+	   ("  NOTE: Using same file for input and output or punchhole option\n"));
+  fprintf (fp, _("        may destructive.\n"));
+  fprintf (fp, _("\n"));
 }
 
 static const char *getfilename (int) __attribute__((malloc));
@@ -264,7 +275,7 @@ parse_redirect (int argc, char **argv, struct opt *opt)
 {
   for (int i = 1; i < argc; i++)
     {
-      // "\\<...", "\\>...", "\\\\<..." or "\\\\>..." is escaped argument
+      // _("\\<..."), _("\\>..."), _("\\\\<...") or _("\\\\>...") is escaped argument
       if (argv[i][0] == '\\'
 	  && (argv[i][1] == '<' || argv[i][1] == '>'
 	      || (argv[i][1] == '\\'
@@ -312,7 +323,7 @@ parse_redirect (int argc, char **argv, struct opt *opt)
 	      i++;
 	      if (i >= argc)
 		{
-		  fprintf (stderr, "no file specified for %s\n", op);
+		  fprintf (stderr, _("no file specified for %s\n"), op);
 		  print_usage (stderr, argc, argv);
 		  exit (EXIT_FAILURE);
 		}
@@ -321,13 +332,13 @@ parse_redirect (int argc, char **argv, struct opt *opt)
 	    }
 	  if (in && opt->file_input != NULL)
 	    {
-	      fprintf (stderr, "cannot set input file twice or more\n");
+	      fprintf (stderr, _("cannot set input file twice or more\n"));
 	      print_usage (stderr, argc, argv);
 	      exit (EXIT_FAILURE);
 	    }
 	  if (out && opt->file_output != NULL)
 	    {
-	      fprintf (stderr, "cannot set output file twice or more\n");
+	      fprintf (stderr, _("cannot set output file twice or more\n"));
 	      print_usage (stderr, argc, argv);
 	      exit (EXIT_FAILURE);
 	    }
@@ -357,7 +368,7 @@ parse_options (int argc, char *argv[], struct opt *opt)
 	case 'i':
 	  if (opt->file_input != NULL)
 	    {
-	      fprintf (stderr, "cannot set input file twice or more\n");
+	      fprintf (stderr, _("cannot set input file twice or more\n"));
 	      print_usage (stderr, argc, argv);
 	      exit (EXIT_FAILURE);
 	    }
@@ -366,7 +377,7 @@ parse_options (int argc, char *argv[], struct opt *opt)
 	case 'o':
 	  if (opt->file_output != NULL)
 	    {
-	      fprintf (stderr, "cannot set output file twice or more\n");
+	      fprintf (stderr, _("cannot set output file twice or more\n"));
 	      print_usage (stderr, argc, argv);
 	      exit (EXIT_FAILURE);
 	    }
@@ -375,13 +386,13 @@ parse_options (int argc, char *argv[], struct opt *opt)
 	case 'f':
 	  if (opt->file_input != NULL)
 	    {
-	      fprintf (stderr, "cannot set input file twice or more\n");
+	      fprintf (stderr, _("cannot set input file twice or more\n"));
 	      print_usage (stderr, argc, argv);
 	      exit (EXIT_FAILURE);
 	    }
 	  if (opt->file_output != NULL)
 	    {
-	      fprintf (stderr, "cannot set output file twice or more\n");
+	      fprintf (stderr, _("cannot set output file twice or more\n"));
 	      print_usage (stderr, argc, argv);
 	      exit (EXIT_FAILURE);
 	    }
@@ -391,7 +402,7 @@ parse_options (int argc, char *argv[], struct opt *opt)
 	case 'r':
 	  if (opt->file_rename != NULL)
 	    {
-	      fprintf (stderr, "cannot set rename file twice or more\n");
+	      fprintf (stderr, _("cannot set rename file twice or more\n"));
 	      print_usage (stderr, argc, argv);
 	      exit (EXIT_FAILURE);
 	    }
@@ -400,7 +411,7 @@ parse_options (int argc, char *argv[], struct opt *opt)
 	case 'a':
 	  if (opt->append)
 	    {
-	      fprintf (stderr, "cannot set append mode twice or more\n");
+	      fprintf (stderr, _("cannot set append mode twice or more\n"));
 	      print_usage (stderr, argc, argv);
 	      exit (EXIT_FAILURE);
 	    }
@@ -409,7 +420,8 @@ parse_options (int argc, char *argv[], struct opt *opt)
 	case 'p':
 	  if (opt->punchhole)
 	    {
-	      fprintf (stderr, "cannot set punchhole mode twice or more\n");
+	      fprintf (stderr,
+		       _("cannot set punchhole mode twice or more\n"));
 	      print_usage (stderr, argc, argv);
 	      exit (EXIT_FAILURE);
 	    }
@@ -477,7 +489,7 @@ setopenflags (int fd, int flags)
   curflags |= flags;
   if (fcntl (fd, F_SETFL, flags) == -1)
     {
-      perror ("cannot set append mode on <stdout>\n");
+      perror (_("cannot set append mode on <stdout>\n"));
       exit (EXIT_FAILURE);
     }
 }
@@ -505,7 +517,8 @@ open_iofile (struct opt *opt, int fds[2])
       fds[0] = STDIN_FILENO;
       if (opt->punchhole)
 	{
-	  fprintf (stderr, "cannot set punchhole mode for outer redirect\n");
+	  fprintf (stderr,
+		   _("cannot set punchhole mode for outer redirect\n"));
 	  exit (EXIT_FAILURE);
 	}
     }
@@ -533,6 +546,8 @@ int
 main (int argc, char *argv[])
 {
   setlocale (LC_ALL, "");
+  bindtextdomain (PACKAGE, LOCALEDIR);
+textdomain (PACKAGE);
   struct opt opt = OPT_INITIALIZER;
 
   check_stdio (&opt);
@@ -557,7 +572,7 @@ main (int argc, char *argv[])
     {
       if (!S_ISREG (st[1].st_mode))
 	{
-	  fprintf (stderr, "cannot rename non regular output\n");
+	  fprintf (stderr, _("cannot rename non regular output\n"));
 	  exit (EXIT_FAILURE);
 	}
       if (lstat (opt.file_rename, st + 2) == -1)
@@ -609,7 +624,7 @@ main (int argc, char *argv[])
 	    }
 	  else if (st[1].st_ino == st[2].st_ino)
 	    {
-	      fprintf (stderr, "cannot rename to same file\n");
+	      fprintf (stderr, _("cannot rename to same file\n"));
 	      exit (EXIT_FAILURE);
 	    }
 	}
@@ -619,7 +634,7 @@ main (int argc, char *argv[])
     && S_ISREG (st[0].st_mode) && S_ISREG (st[1].st_mode);
   if (opt.append && !S_ISREG (st[1].st_mode))
     {
-      fprintf (stderr, "cannot append to non regular file\n");
+      fprintf (stderr, _("cannot append to non regular file\n"));
       print_usage (stderr, argc, argv);
       exit (EXIT_FAILURE);
     }
@@ -729,18 +744,18 @@ main (int argc, char *argv[])
 	{
 	  if (ieof && isize == 0 && oeof && osize == 0)
 	    break;
-	  fprintf (stderr, "buffer exceeded\n");
+	  fprintf (stderr, _("buffer exceeded\n"));
 	  fprintf (stderr,
-		   "%s(%ju/%ju) -> %s (buffer = %zu/pipe buffer = %u)\n",
+		   _("%s(%ju/%ju) -> %s (buffer = %zu/pipe buffer = %u)\n"),
 		   opt.file_input ==
-		   NULL ? "<stdin>" : getrelative (opt.file_input),
+		   NULL ? _("<stdin>") : getrelative (opt.file_input),
 		   (uintmax_t) ipos, (uintmax_t) st[0].st_size,
 		   argv[optind] == NULL ? argv[0] : argv[optind], isize,
 		   PIPE_BUF);
 	  fprintf (stderr,
-		   "%s(%ju/%ju) <- %s (buffer = %zu/pipe buffer = %u)\n",
+		   _("%s(%ju/%ju) <- %s (buffer = %zu/pipe buffer = %u)\n"),
 		   opt.file_output ==
-		   NULL ? "<stdout>" : getrelative (opt.file_output),
+		   NULL ? _("<stdout>") : getrelative (opt.file_output),
 		   (uintmax_t) opos, (uintmax_t) st[1].st_size,
 		   argv[optind] == NULL ? argv[0] : argv[optind], osize,
 		   PIPE_BUF);
@@ -787,7 +802,7 @@ main (int argc, char *argv[])
 	  ssize_t sz = rsize == 0 ? 0 : read (fds[0], ibuf + isize, rsize);
 	  if (sz == -1)
 	    {
-	      perror ("pread");
+	      perror ("read");
 	      exit (EXIT_FAILURE);
 	    }
 	  if (sz == 0)
@@ -817,7 +832,7 @@ main (int argc, char *argv[])
 	  ssize_t sz = write (fds[1], obuf, wsize);
 	  if (sz == -1)
 	    {
-	      perror ("pwrite");
+	      perror ("write");
 	      exit (EXIT_FAILURE);
 	    }
 	  memmove (obuf, obuf + sz, st[1].st_blksize - sz);
