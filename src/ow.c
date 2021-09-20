@@ -14,12 +14,13 @@
 #include <sys/sendfile.h>
 #include <libgen.h>
 #include <locale.h>
-#include "gettext.h"
 
 #include "config.h"
 
-#define _(String) gettext(String)
-#define N_(String) gettext_noop(String)
+#include <libintl.h>
+#define _(String) gettext (String)
+#define gettext_noop(String) String
+#define N_(String) gettext_noop (String)
 
 #define OFF_MAX (~((off_t)1<<(sizeof(off_t)*8-1)))
 
@@ -547,7 +548,7 @@ main (int argc, char *argv[])
 {
   setlocale (LC_ALL, "");
   bindtextdomain (PACKAGE, LOCALEDIR);
-textdomain (PACKAGE);
+  textdomain (PACKAGE);
   struct opt opt = OPT_INITIALIZER;
 
   check_stdio (&opt);
