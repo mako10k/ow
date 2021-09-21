@@ -32,9 +32,12 @@ Input file.
 .TP
 .BI \-o " file"
 Output file.
+.br
 It write on the position after read area when you set it as same as input file.
 .br
-CAUTION: Never use same input and output with increasing output data size against input data size by supplied command.
+.B NOTE:
+Never use same input and output with increasing output data size against input data size by supplied command.
+.br
 It makes deadlock by consuming all buffer to write on safe position.
 .TP
 .BI \-f " file"
@@ -42,12 +45,16 @@ Input / output file.
 .TP
 .B \-a
 Output file open as append mode.
+.br
 Only available for regular output file.
 .TP
 .B \-p
 Make punchhole on the read file after read position.
+.br
 Only available for regular input file.
-CAUTION: This option may destructive.
+.br
+.B NOTE:
+This option may destructive.
 .TP
 .BI \-r " file"
 Rename output file after completing pipeline.
@@ -58,18 +65,38 @@ Show summary of options.
 .B \-V
 Show version of program.
 .SH REDIRECTS
+.BI < " and " >
+are shell special letter, they must escape or in quoted string for this function.
+.br
+Otherwise it will be as shell redirect function.
 .TP
 .BI < " file"
 Input file.
+.br
+This is almost same function as shell redirect except punchhole mode.
+.br
+If this redirect parsed by this command, it will be opened as read/write mode when it uses punchhole mode.
 .TP
 .BI > " file"
 Output file.
+.br
+This is almost same function as shell redirect except truncating when opening file.
+.br
+If this redirect parsed by this command, it will be opened without truncating.
 .TP
 .BI >> " file"
 Output file with append mode.
+.br
+This is same function as shell redirect.
 .TP
 .BI <> " file"
 Input / output file.
+.br
+This is different from shell redirect.
+.br
+If this redirect parsed by this command, it will be opened as stdin and stdout simultaneously.
 .TP
 .BI <>> " file"
 Input / output file with append mode.
+.br
+This is not exist in shell redirection.
