@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: ow 0.1.0\n"
 "Report-Msgid-Bugs-To: katsumata-m@t-axis.co.jp\n"
-"POT-Creation-Date: 2021-09-17 19:53+0900\n"
+"POT-Creation-Date: 2021-09-21 10:22+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -17,231 +17,231 @@ msgstr ""
 "Content-Type: text/plain; charset=CHARSET\n"
 "Content-Transfer-Encoding: 8bit\n"
 
-#: src/ow.c:50
+#: src/ow.c:51
 #, c-format
 msgid "%s\n"
 msgstr ""
 
-#: src/ow.c:56
+#: src/ow.c:57
 #, c-format
 msgid "Usage:\n"
 msgstr ""
 
-#: src/ow.c:57
+#: src/ow.c:58
 #, c-format
 msgid "  %s [options] [--] cmd [arg ...] [redirects]\n"
 msgstr ""
 
-#: src/ow.c:58 src/ow.c:70 src/ow.c:77 src/ow.c:92 src/ow.c:99 src/ow.c:104
+#: src/ow.c:59 src/ow.c:71 src/ow.c:78 src/ow.c:93 src/ow.c:100 src/ow.c:105
 #, c-format
 msgid "\n"
 msgstr ""
 
-#: src/ow.c:59
+#: src/ow.c:60
 #, c-format
 msgid "Options:\n"
 msgstr ""
 
-#: src/ow.c:60
+#: src/ow.c:61
 #, c-format
 msgid "  -i infile     : input file\n"
 msgstr ""
 
-#: src/ow.c:61
+#: src/ow.c:62
 #, c-format
 msgid "  -o outfile    : output file\n"
 msgstr ""
 
-#: src/ow.c:62
+#: src/ow.c:63
 #, c-format
 msgid "  -f inoutfile  : input/output file\n"
 msgstr ""
 
-#: src/ow.c:63
+#: src/ow.c:64
 #, c-format
 msgid "  -r renamefile : rename output file\n"
 msgstr ""
 
-#: src/ow.c:64
+#: src/ow.c:65
 #, c-format
 msgid "  -a            : append mode\n"
 msgstr ""
 
-#: src/ow.c:67
+#: src/ow.c:68
 #, c-format
 msgid "  -p            : punchhole mode (punchhole read data on input file)\n"
 msgstr ""
 
-#: src/ow.c:68
+#: src/ow.c:69
 #, c-format
 msgid "  -V            : show version\n"
 msgstr ""
 
-#: src/ow.c:69
+#: src/ow.c:70
 #, c-format
 msgid "  -h            : show usage\n"
 msgstr ""
 
-#: src/ow.c:71
+#: src/ow.c:72
 #, c-format
 msgid "Redirects:\n"
 msgstr ""
 
-#: src/ow.c:72
+#: src/ow.c:73
 #, c-format
 msgid "  < infile      : input file\n"
 msgstr ""
 
-#: src/ow.c:73
+#: src/ow.c:74
 #, c-format
 msgid "  > outfile     : output file\n"
 msgstr ""
 
-#: src/ow.c:74
+#: src/ow.c:75
 #, c-format
 msgid "  >> outfile    : output file (append mode)\n"
 msgstr ""
 
-#: src/ow.c:75
+#: src/ow.c:76
 #, c-format
 msgid "  <> inoutfile  : input/output file\n"
 msgstr ""
 
-#: src/ow.c:76
+#: src/ow.c:77
 #, c-format
 msgid "  <>> inoutfile : input/output file (append mode)\n"
 msgstr ""
 
-#: src/ow.c:78
+#: src/ow.c:79
 #, c-format
 msgid "  NOTE: You can use same file for input and output.\n"
 msgstr ""
 
-#: src/ow.c:81
+#: src/ow.c:82
 #, c-format
 msgid "        It writes to output file only read position to safe read.\n"
 msgstr ""
 
-#: src/ow.c:84
+#: src/ow.c:85
 #, c-format
 msgid ""
 "        But you shouldn't output widely incresed size data against input\n"
 msgstr ""
 
-#: src/ow.c:85
+#: src/ow.c:86
 #, c-format
 msgid "        when you use same file for input and output.\n"
 msgstr ""
 
-#: src/ow.c:88
+#: src/ow.c:89
 #, c-format
 msgid "        It would be stopped program because the all buffer consumed\n"
 msgstr ""
 
-#: src/ow.c:91
+#: src/ow.c:92
 #, c-format
 msgid "        to wait forever writing for read position on the file.\n"
 msgstr ""
 
-#: src/ow.c:93
+#: src/ow.c:94
 #, c-format
 msgid "  NOTE: < and > must escape or quote on shell.\n"
 msgstr ""
 
-#: src/ow.c:94
+#: src/ow.c:95
 #, c-format
 msgid "    example:\n"
 msgstr ""
 
-#: src/ow.c:97
+#: src/ow.c:98
 #, c-format
 msgid ""
 "      %s -p -r hugefile.txt.gz gzip -c '<hugefile.txt' \\> hugefile.txt\n"
 msgstr ""
 
-#: src/ow.c:102
+#: src/ow.c:103
 #, c-format
 msgid "  NOTE: Using same file for input and output or punchhole option\n"
 msgstr ""
 
-#: src/ow.c:103
+#: src/ow.c:104
 #, c-format
 msgid "        may destructive.\n"
 msgstr ""
 
-#: src/ow.c:326
+#: src/ow.c:327
 #, c-format
 msgid "no file specified for %s\n"
 msgstr ""
 
-#: src/ow.c:335 src/ow.c:371 src/ow.c:389
+#: src/ow.c:336 src/ow.c:372 src/ow.c:390
 #, c-format
 msgid "cannot set input file twice or more\n"
 msgstr ""
 
-#: src/ow.c:341 src/ow.c:380 src/ow.c:395
+#: src/ow.c:342 src/ow.c:381 src/ow.c:396
 #, c-format
 msgid "cannot set output file twice or more\n"
 msgstr ""
 
-#: src/ow.c:405
+#: src/ow.c:406
 #, c-format
 msgid "cannot set rename file twice or more\n"
 msgstr ""
 
-#: src/ow.c:414
+#: src/ow.c:415
 #, c-format
 msgid "cannot set append mode twice or more\n"
 msgstr ""
 
-#: src/ow.c:424
+#: src/ow.c:425
 #, c-format
 msgid "cannot set punchhole mode twice or more\n"
 msgstr ""
 
-#: src/ow.c:492
+#: src/ow.c:493
 msgid "cannot set append mode on <stdout>\n"
 msgstr ""
 
-#: src/ow.c:521
+#: src/ow.c:522
 #, c-format
 msgid "cannot set punchhole mode for outer redirect\n"
 msgstr ""
 
-#: src/ow.c:575
+#: src/ow.c:576
 #, c-format
 msgid "cannot rename non regular output\n"
 msgstr ""
 
-#: src/ow.c:627
+#: src/ow.c:628
 #, c-format
 msgid "cannot rename to same file\n"
 msgstr ""
 
-#: src/ow.c:637
+#: src/ow.c:638
 #, c-format
 msgid "cannot append to non regular file\n"
 msgstr ""
 
-#: src/ow.c:747
+#: src/ow.c:748
 #, c-format
 msgid "buffer exceeded\n"
 msgstr ""
 
-#: src/ow.c:749
+#: src/ow.c:750
 #, c-format
 msgid "%s(%ju/%ju) -> %s (buffer = %zu/pipe buffer = %u)\n"
 msgstr ""
 
-#: src/ow.c:751
+#: src/ow.c:752
 msgid "<stdin>"
 msgstr ""
 
-#: src/ow.c:756
+#: src/ow.c:757
 #, c-format
 msgid "%s(%ju/%ju) <- %s (buffer = %zu/pipe buffer = %u)\n"
 msgstr ""
 
-#: src/ow.c:758
+#: src/ow.c:759
 msgid "<stdout>"
 msgstr ""
