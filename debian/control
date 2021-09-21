@@ -1,0 +1,12 @@
+Source: ow
+Section: utils
+Priority: optional
+Maintainer: Makoto Katsumata <katsumata-m@t-axis.co.jp>
+Build-Depends: debhelper-compat (= 12), autotools-dev
+Standards-Version: 4.4.1
+
+Package: ow
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: OverWrite redirect manipulation
+ This command extends redirection on less storage environment.
