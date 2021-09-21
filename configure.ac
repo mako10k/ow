@@ -32,6 +32,6 @@ AC_FUNC_LSTAT_FOLLOWS_SLASHED_SYMLINK
 AC_FUNC_MALLOC
 AC_CHECK_FUNCS([dup2 memmove select ftruncate getcwd])
 
-AC_CONFIG_FILES([Makefile src/Makefile po/Makefile.in])
+AC_CONFIG_FILES([Makefile src/Makefile po/Makefile.in man/Makefile])
 
 AC_OUTPUT
