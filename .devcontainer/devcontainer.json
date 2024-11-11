@@ -5,7 +5,17 @@
 	// Or use a Dockerfile or Docker Compose file. More info: https://containers.dev/guide/dockerfile
 	"image": "mcr.microsoft.com/devcontainers/base:bullseye",
 	"features": {
-		"ghcr.io/devcontainers-extra/features/apt-packages:1": {},
+		"ghcr.io/devcontainers-extra/features/apt-packages:1": {
+			"packages" : [
+				"autoconf",
+				"automake",
+				"autopoint",
+				"gettext",
+				"make",
+				"pkg-config",
+				"libtool"
+			]
+		},
 		"ghcr.io/devcontainers/features/github-cli:1": {},
 		"ghcr.io/devcontainers-community/features/llvm:3": {}
 	}
